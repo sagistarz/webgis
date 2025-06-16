@@ -15,7 +15,106 @@
 }
 
 body {
+  margin: 0;
+  padding: 0;
   color: var(--foreground);
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+html,
+body,
+.__variable_4d318d,
+main {
+  height: 100%;
+}
+
+/* .legend {
+  background: white;
+  padding: 10px;
+  border-radius: 5px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+}
+
+.legend h4 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.legend div {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.legend span {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  opacity: 0.7;
+} */
+
+/* styles/leaflet-overrides.css */
+.leaflet-control-geosearch {
+  width: 300px;
+  max-width: 90%;
+  margin: 10px;
+  font-family: inherit; /* Untuk konsistensi font */
+}
+
+.leaflet-control-geosearch form {
+  border-radius: 20px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+  overflow: hidden;
+  background: white !important;
+}
+
+.leaflet-control-geosearch input {
+  border-radius: 20px !important;
+  padding: 8px 15px !important;
+  font-size: 14px !important;
+  border: none !important;
+  outline: none !important;
+  color: #000 !important;
+  background-color: white !important;
+}
+
+/* Styling untuk dropdown/suggestions */
+.leaflet-control-geosearch .results {
+  border-radius: 10px !important;
+  margin-top: 5px !important;
+  background: white !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+.leaflet-control-geosearch .results * {
+  color: #000 !important; /* Warna teks hitam untuk semua elemen dalam results */
+}
+
+.leaflet-control-geosearch .results a {
+  padding: 8px 12px !important;
+  color: #000 !important;
+  text-decoration: none !important;
+  display: block !important;
+}
+
+.leaflet-control-geosearch .results a:hover {
+  background: #f5f5f5 !important;
+  color: #000 !important;
+}
+
+/* Styling untuk teks suggestion */
+.leaflet-control-geosearch .results .result-item {
+  color: #000 !important;
+}
+
+.leaflet-control-geosearch .results .result-item .name {
+  color: #000 !important;
+  font-weight: normal !important;
+}
+
+.leaflet-control-geosearch .results .result-item .location {
+  color: #555 !important; /* Sedikit lebih terang untuk teks lokasi */
+  font-size: 0.9em !important;
 }

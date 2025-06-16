@@ -1,0 +1,32 @@
+/* .legend {
+  position: absolute;
+  bottom: 80px;
+  left: 20px;
+  z-index: 1000;
+  background: white;
+  padding: 15px;
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  font-size: 14px;
+  max-width: 300px;
+  color: black;
+}
+
+.legend h4 {
+  margin: 0 0 10px 0;
+  text-align: center;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.legendColor {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  border: 1px solid #ccc;
+} */

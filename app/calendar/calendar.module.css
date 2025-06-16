@@ -1,0 +1,639 @@
+.container {
+  padding: 40px;
+  font-family: sans-serif;
+  background-color: #f0f6ec;
+  color: black;
+}
+
+.searchBar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 36px;
+}
+
+.searchInput {
+  min-width: 300px;
+  padding: 14px 20px;
+  border-radius: 999px;
+  box-shadow: 0 4px 5px rgba(0, 0, 0, 0.1);
+}
+
+.content {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 50px;
+}
+
+.left {
+  flex: 1;
+  /* flex: 2; */
+}
+
+.right {
+  flex: 1;
+  /* flex: 3; */
+}
+
+.location {
+  margin: 10px 0;
+  font-weight: bold;
+  font-size: 22px;
+}
+.date {
+  margin: 10px 0;
+  font-weight: 600;
+}
+
+.dropdownRow {
+  display: flex;
+  gap: 20px;
+  margin: 16px 0;
+  /* padding: 10px 10px 10px 0px; */
+}
+.dropdownRowText {
+  padding: 10px 30px;
+  border-radius: 8px;
+}
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.dayName {
+  font-weight: bold;
+  text-align: center;
+}
+
+.dayCell {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  background: #fff;
+  padding: 4px;
+  min-height: auto;
+  gap: 3px;
+}
+
+.pmValue {
+  font-size: 17px;
+  font-weight: bold;
+  color: white;
+}
+
+.label {
+  font-size: 13px;
+}
+
+.infromationPM {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  /* width: fit-content; */
+  background-color: #9fc0ab;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  margin-bottom: 14px;
+  color: white;
+  align-items: center;
+}
+
+.qualityBox {
+  border-right: 1px solid white;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qualityBoxIndicator {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+
+.legend h3 {
+  margin-bottom: 16px;
+  color: #333;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.legendItem {
+  margin-bottom: 16px;
+}
+
+/* range + Color Label */
+.legendHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+/* range (0-50) */
+.legendHeader span:first-child {
+  font-weight: bold;
+  min-width: 60px;
+}
+
+/* label warna  */
+.legendHeader span:last-child {
+  padding: 4px 8px;
+  border-radius: 5px;
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+/* desc*/
+.legendItem p {
+  font-size: 15px;
+  /* line-height: 2; */
+  margin-left: 70px;
+}
+
+.weather {
+  background: #e2ede1;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.weather h3 {
+  display: flex;
+  justify-content: center;
+  font-weight: bold;
+  padding: 10px;
+}
+
+.weather table {
+  width: 100%;
+  /* biar border nyambung gak kepisah2 kyk separate */
+  border-collapse: collapse;
+}
+
+.weather th {
+  border-bottom: 1px solid #ccc;
+  padding: 10px;
+  /* text-align: center; */
+}
+.weather td {
+  padding: 8px;
+  text-align: center;
+}
+
+.indikatorPMContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+.indikatorPM {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: opacity 0.3s ease;
+  /* flex-direction: column; */
+}
+
+.otherMonthDay {
+  color: #888;
+}
+
+.dayCell {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.dayCell:hover {
+  transform: scale(1.03);
+}
+
+.selectedDate {
+  box-shadow: 0 0 0 2px #0070f3;
+  border-radius: 8px;
+}
+
+.otherMonthDay {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* .dayCell:active {
+  transform: scale(0.98);
+} */
+
+/* split view */
+.isSplitView {
+  height: 100%;
+  overflow-y: auto;
+}
+.isSplitView .container {
+  padding: 0;
+  background-color: transparent;
+  height: 100%;
+}
+
+.isSplitView .content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.isSplitView .left {
+  width: 100%;
+  padding: 10px;
+}
+
+.isSplitView .calendarGrid {
+  flex-grow: 1;
+}
+
+/* Tambahkan style untuk search bar di split view */
+.searchBar {
+  display: flex;
+  margin-bottom: 15px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+/* .searchInput {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px 0 0 4px;
+  outline: none;
+}
+
+.searchButton {
+  padding: 8px 12px;
+  background: #6A9C80;
+  color: white;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.searchButton:hover {
+  background: #5a8c70;
+} */
+
+.content {
+  margin-top: 30px;
+}
+
+.location {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.date {
+  margin-bottom: 20px;
+  color: #666;
+}
+
+.dropdownRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.dropdownRowText {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.searchBar {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 10px 0;
+  background-color: #f0f6ec;
+}
+
+.searchInput {
+  width: 80%;
+  padding: 10px 15px;
+  border: 1px solid #ccc;
+  border-radius: 15px;
+  font-size: 16px;
+}
+
+.searchSuggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-top: 5px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.suggestionItem {
+  padding: 8px 15px;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+}
+
+.suggestionItem:hover {
+  background-color: #f5f5f5;
+}
+
+.suggestionItem:last-child {
+  border-bottom: none;
+}
+
+/* Di calendar.module.css */
+.weatherHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.stationSelector {
+  position: relative;
+  display: inline-block;
+}
+
+.stationDropdownButton {
+  padding: 8px 15px;
+  background-color: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.stationDropdownButton:hover {
+  background-color: #e0e0e0;
+}
+
+.dropdownArrow {
+  font-size: 12px;
+}
+
+.stationDropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  max-height: 300px;
+  overflow-y: auto;
+  width: 200px;
+}
+
+.stationOption {
+  padding: 8px 15px;
+  cursor: pointer;
+}
+
+.stationOption:hover {
+  background-color: #f5f5f5;
+}
+
+.selectedStation {
+  background-color: #e0f0ff;
+  font-weight: bold;
+}
+
+.stationSelector {
+  margin: 1rem 0;
+  position: relative;
+}
+
+.selectContainer {
+  position: relative;
+}
+
+.loadingIndicator {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.spinner {
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top: 2px solid #3498db;
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.errorText {
+  color: #ff0000;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+
+.retryButton {
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.5rem;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* PM25 Station Selector */
+.pm25StationSelector {
+  margin-bottom: 15px;
+}
+
+.pm25StationSelector select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background-color: white;
+  font-size: 14px;
+}
+
+.stationDate {
+  font-size: 12px;
+  color: #666;
+  margin-top: 5px;
+  text-align: center;
+}
+
+/* Loading state */
+.loadingPM25 {
+  text-align: center;
+  padding: 10px;
+  color: #666;
+}
+
+.errorPM25 {
+  text-align: center;
+  padding: 10px;
+  color: #ff0000;
+}
+
+/* Style khusus untuk dropdown PM2.5 station */
+.pm25StationSelector select {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  /* border: 1px solid #9fc0ab; */
+  background-color: #9fc0ab;
+  color: white;
+  font-weight: bold;
+}
+
+.pm25StationSelector select option {
+  background-color: white;
+  color: #333;
+}
+
+/* calendar.module.css */
+.today {
+  position: relative;
+  border: 2px solid #4caf50 !important;
+}
+
+.today::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  background-color: #4caf50;
+  border-radius: 50%;
+}
+
+/* Station Selector Styles */
+.stationSelector {
+  padding: 8px 12px;
+  border-radius: 20px;
+  border: 1px solid #ddd;
+  background-color: white;
+  font-size: 16px;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23333%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px auto;
+  padding-right: 32px;
+  min-width: 250px;
+  outline: none;
+}
+
+.stationSelector:hover {
+  border-color: #aaa;
+}
+
+.stationSelector:focus {
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+/* Location Container Styles */
+.location {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.locationIcon {
+  font-size: 18px;
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+  .stationSelector {
+    min-width: 200px;
+    font-size: 14px;
+  }
+
+  .location {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+.actualLabel {
+  font-size: 10px;
+  color: #333;
+  text-align: center;
+  margin-top: 2px;
+}
+
+.dataLabel {
+  font-size: 13px;
+  color: #666;
+  text-align: center;
+  margin-top: 5px;
+  /* font-style: italic; */
+}
+
+/* Optional: styling khusus untuk "No Data" */
+.dataLabel:empty {
+  display: none;
+}
+
+.monthYearSelector {
+  display: flex;
+  gap: 8px;
+}
+
+.monthSelector,
+.yearSelector {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background-color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.monthSelector {
+  min-width: 120px;
+}
+
+.yearSelector {
+  min-width: 80px;
+}
