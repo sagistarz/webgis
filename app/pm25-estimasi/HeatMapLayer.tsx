@@ -295,7 +295,7 @@ const HeatMapLayer = ({ geoData, boundaryData, selectedDate, isLoading, inputRef
             <span>Sedang (51 - 100)</span>
             <span>Tidak Sehat (101 - 199)</span>
             <span>Sangat Tidak Sehat (200 - 299)</span>
-            <span>Berbahaya (> 300)</span>
+            <span>Berbahaya (&gt; 300)</span>
           </div>
         </div>
       </div>
