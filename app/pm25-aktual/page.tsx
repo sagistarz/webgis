@@ -290,7 +290,7 @@ import React, { useRef, useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import Navbar from "../components/navbar/page";
+import Navbar from "../components/navbar/Navbar";
 import styles from "./stasiun.module.css";
 import { FiChevronRight } from "react-icons/fi";
 import dynamic from "next/dynamic";
@@ -314,7 +314,7 @@ interface WeatherData {
   longitude: number;
 }
 
-const Calendar = dynamic(() => import("../calendar/page"), {
+const Calendar = dynamic(() => import("../components/calendar/Calendar"), {
   ssr: false,
   loading: () => (
     <div className="h-full w-full flex items-center justify-center">
@@ -366,9 +366,7 @@ const StasiunPM25 = () => {
           setStations(pm25Data);
         } else {
           setStations([]);
-          const errorMessage = pm25Data.message?.includes("Tidak ada data PM2.5")
-            ? "Tidak ada data PM2.5 tersedia untuk tanggal ini"
-            : "Gagal memuat data stasiun";
+          const errorMessage = pm25Data.message?.includes("Tidak ada data PM2.5") ? "Tidak ada data PM2.5 tersedia untuk tanggal ini" : "Gagal memuat data stasiun";
           setError(errorMessage);
         }
 
@@ -429,10 +427,7 @@ const StasiunPM25 = () => {
           <div className={styles.alert}>
             <div className={styles.alertContent}>
               <span className="text-red-500 font-semibold">{error}</span>
-              <button
-                onClick={() => setError(null)}
-                className="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
+              <button onClick={() => setError(null)} className="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500">
                 Tutup
               </button>
             </div>
@@ -454,10 +449,7 @@ const StasiunPM25 = () => {
               zoomControl={false}
               ref={mapRef}
             >
-              <TileLayer
-                url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                attribution='© <a href="https://carto.com/attributions">CartoDB</a> & <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
-              />
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='© <a href="https://carto.com/attributions">CartoDB</a> & <a href="http://osm.org/copyright">OpenStreetMap</a> contributors' />
 
               {boundaryJakarta && (
                 <GeoJSON
@@ -488,9 +480,7 @@ const StasiunPM25 = () => {
                     >
                       <Popup>
                         <div className="font-bold">Stasiun: {station.station_name}</div>
-                        <div className="font-bold">
-                          PM2.5: {station.pm25_value !== null && !isNaN(station.pm25_value) ? station.pm25_value.toFixed(2) : "Tidak tersedia"}
-                        </div>
+                        <div className="font-bold">PM2.5: {station.pm25_value !== null && !isNaN(station.pm25_value) ? station.pm25_value.toFixed(2) : "Tidak tersedia"}</div>
                         <div
                           className="text-white font-semibold px-2 py-1 rounded mt-1 mb-1 inline-block"
                           style={{
