@@ -1,36 +1,3 @@
-// "use client";
-// import React from "react";
-// import Link from "next/link";
-// import { usePathname } from "next/navigation";
-// import styles from "./navbar.module.css";
-
-// const Navbar = () => {
-//   const pathname = usePathname();
-
-//   return (
-
-//     <div className={styles.navbar}>
-//       <div className={styles.left}>PM2.5</div>
-//       <div className={styles.center}>
-//         <Link href="/" className={`${styles.navLink} ${pathname === "/" ? styles.active : ""}`}>
-//           AOD
-//         </Link>
-//         <Link href="/calendar" className={`${styles.navLink} ${pathname === "/calendar" ? styles.active : ""}`}>
-//           Calendar
-//         </Link>
-//         <Link href="/stasiun-map" className={`${styles.navLink} ${pathname === "/stasiun-map" ? styles.active : ""}`}>
-//           PM25 (VIIRS)
-//         </Link>
-//         <Link href="/pm25-stasiun" className={`${styles.navLink} ${pathname === "/pm25-stasiun" ? styles.active : ""}`}>
-//           PM25 (Stasiun)
-//         </Link>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default Navbar;
-
 "use client";
 import React, { useState } from "react";
 import Link from "next/link";
@@ -63,18 +30,18 @@ const Navbar = () => {
               <Link href="/" className={`${styles.dropdownItem} ${pathname === "/" ? styles.active : ""}`} onClick={closeDropdown}>
                 AOD
               </Link>
-              <Link href="/stasiun-map" className={`${styles.dropdownItem} ${pathname === "/stasiun-map" ? styles.active : ""}`} onClick={closeDropdown}>
-                PM25 (Satelit)
+              <Link href="/pm25-estimasi" className={`${styles.dropdownItem} ${pathname === "/pm25-estimasi" ? styles.active : ""}`} onClick={closeDropdown}>
+                PM25 (Estimasi)
               </Link>
-              <Link href="/pm25-stasiun" className={`${styles.dropdownItem} ${pathname === "/pm25-stasiun" ? styles.active : ""}`} onClick={closeDropdown}>
-                PM25 (Stasiun)
+              <Link href="/pm25-aktual" className={`${styles.dropdownItem} ${pathname === "/pm25-aktual" ? styles.active : ""}`} onClick={closeDropdown}>
+                PM25 (Aktual)
               </Link>
             </div>
           )}
         </div>
 
         <Link href="/calendar" className={`${styles.navLink} ${pathname === "/calendar" ? styles.active : ""}`}>
-          Calendar
+          Kalender
         </Link>
       </div>
     </div>

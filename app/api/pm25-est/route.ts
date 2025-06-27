@@ -1,10 +1,8 @@
-// //nampilin dr model lutfiah
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
     const pm25Url = "http://127.0.0.1:8000/api1/get-data-pm25/";
-    // const pm25Url = "https://f415-180-254-75-101.ngrok-free.app/api1/get-data-pm25/";
 
     const response = await fetch(pm25Url, {
       headers: {

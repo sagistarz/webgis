@@ -5,7 +5,6 @@ import styles from "./calendar.module.css";
 import Navbar from "../components/navbar/page";
 import Image from "next/image";
 
-
 interface PM25Data {
   id: number;
   station_name: string;
@@ -113,7 +112,7 @@ const CalendarPage: React.FC<CalendarProps> = ({ location, isSplitView, showRigh
   // Fetch data realtime PM2.5
   const fetchRealtimePM25Data = useCallback(async () => {
     try {
-      const response = await fetch("/api/pm25-stasiun");
+      const response = await fetch("/api/pm25-aktual");
       if (!response.ok) throw new Error("Failed to fetch realtime PM2.5 data");
       const data = await response.json();
       return data;
@@ -126,7 +125,7 @@ const CalendarPage: React.FC<CalendarProps> = ({ location, isSplitView, showRigh
   // Fetch data historis PM2.5
   const fetchHistoricalPM25Data = useCallback(async (date: string) => {
     try {
-      const response = await fetch("/api/pm25-stasiun/historis", {
+      const response = await fetch("/api/pm25-aktual/pm25-aktual-by-date", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -198,9 +197,6 @@ const CalendarPage: React.FC<CalendarProps> = ({ location, isSplitView, showRigh
       // Ambil data realtime untuk hari ini
       const realtimeData = await fetchRealtimePM25Data();
 
-      // Log untuk memeriksa data realtime
-      console.log("Realtime PM2.5 Data:", realtimeData);
-
       // Cari tanggal-tanggal di bulan ini
       const daysInMonth = getDaysInMonth(currentMonth, currentYear);
       const datesToFetch: string[] = [];
@@ -218,9 +214,6 @@ const CalendarPage: React.FC<CalendarProps> = ({ location, isSplitView, showRigh
         datesToFetch.push(dateStr);
       }
 
-      // Log untuk memeriksa tanggal yang akan diambil
-      console.log("Dates to fetch historical data:", datesToFetch);
-
       // Fetch data historis untuk tanggal yang belum ada
       let historicalData: PM25Data[] = [];
       if (datesToFetch.length > 0) {
@@ -228,19 +221,9 @@ const CalendarPage: React.FC<CalendarProps> = ({ location, isSplitView, showRigh
         historicalData = responses.flat();
       }
 
-      // Log untuk memeriksa data historis
-      console.log("Historical PM2.5 Data:", historicalData);
-
       // Gabungkan data realtime dan historis
       const combinedData = [...realtimeData, ...historicalData];
       setPM25Data(combinedData);
-
-      // Log untuk debugging
-      console.log("Combined PM2.5 Data:", combinedData);
-      console.log(
-        `Data for ${selectedStation} on 2025-05-31:`,
-        combinedData.find((item) => item.date === "2025-05-31" && item.station_name === selectedStation)
-      );
     } catch (err) {
       console.error("Error loading PM2.5 data:", err);
       setError("Gagal memuat data PM2.5. Silakan coba lagi.");
@@ -249,7 +232,7 @@ const CalendarPage: React.FC<CalendarProps> = ({ location, isSplitView, showRigh
     }
   }, [currentMonth, currentYear, selectedStation, fetchRealtimePM25Data, fetchHistoricalPM25Data]);
 
-  // Load data PM2.5 saat bulan, tahun, atau stasiun berubah
+  // Load data PM2.5 saat bulan, tahun, atau stasiun Catt
   useEffect(() => {
     loadDataForMonth();
   }, [currentMonth, currentYear, selectedStation, loadDataForMonth]);
@@ -258,7 +241,6 @@ const CalendarPage: React.FC<CalendarProps> = ({ location, isSplitView, showRigh
   useEffect(() => {
     fetchWeatherData(formatLocalDate(selectedDate));
   }, [selectedDate, selectedStation, fetchWeatherData]);
-
 
   const getDaysInMonth = (month: number, year: number) => {
     return new Date(year, month + 1, 0).getDate();
@@ -317,7 +299,10 @@ const CalendarPage: React.FC<CalendarProps> = ({ location, isSplitView, showRigh
     if (isLoading) {
       return (
         <div className={styles.qualityBox}>
-          <div className={styles.loading}>Memuat data PM2.5...</div>
+          <div className="flex items-center justify-center gap-4">
+            <div className={styles.spinner}></div>
+            <span>Memuat data PM2.5...</span>
+          </div>
         </div>
       );
     }
@@ -412,8 +397,10 @@ const CalendarPage: React.FC<CalendarProps> = ({ location, isSplitView, showRigh
           {isWeatherLoading ? (
             <tr>
               <td colSpan={5} className={styles.loadingRow}>
-                <div className={styles.spinner}></div>
-                Memuat data cuaca...
+                <div className="flex items-center justify-center gap-4">
+                  <div className={styles.spinner}></div>
+                  <span>Memuat data cuaca...</span>
+                </div>
               </td>
             </tr>
           ) : weatherError ? (
@@ -485,7 +472,10 @@ const CalendarPage: React.FC<CalendarProps> = ({ location, isSplitView, showRigh
                 </div>
               </div>
               {isLoading ? (
-                <div className="text-center py-8">Memuat data PM2.5...</div>
+                <div className="text-center py-8 flex items-center justify-center gap-4">
+                  <div className={styles.spinner}></div>
+                  <span>Memuat data PM2.5...</span>
+                </div>
               ) : error ? (
                 <div className="text-center py-8 text-red-500">{error}</div>
               ) : (

@@ -29,7 +29,12 @@ interface WeatherData {
 
 const Calendar = dynamic(() => import("../calendar/page"), {
   ssr: false,
-  loading: () => <div>Loading calendar...</div>,
+  loading: () => (
+    <div className="h-full w-full flex items-center justify-center">
+      <div className={styles.spinner}></div>
+      <span>Memuat kalender...</span>
+    </div>
+  ),
 });
 
 const StasiunPM25 = () => {
@@ -45,7 +50,7 @@ const StasiunPM25 = () => {
   const createIcon = (imgName: string) =>
     L.icon({
       iconUrl: `/images/${imgName}`,
-      iconSize: [32, 37],
+      iconSize: [37, 37],
       iconAnchor: [16, 37],
       popupAnchor: [0, -37],
       shadowUrl: undefined,
@@ -53,18 +58,18 @@ const StasiunPM25 = () => {
 
   const getIconByPM25 = (pm25: number | null) => {
     if (pm25 === null || isNaN(pm25)) return createIcon("indikator_null.png");
-    if (pm25 >= 0 && pm25 <= 15.5) return createIcon("indikator_baik.png");
-    if (pm25 >= 15.6 && pm25 <= 55.4) return createIcon("indikator_sedang.png");
-    if (pm25 >= 55.5 && pm25 <= 150.4) return createIcon("indikator_tidak_sehat.png");
-    if (pm25 >= 150.5 && pm25 <= 250.4) return createIcon("indikator_sangat_tidak_sehat.png");
-    if (pm25 > 250.4) return createIcon("indikator_berbahaya.png");
+    if (pm25 >= 0 && pm25 <= 50.9) return createIcon("indikator_baik.png");
+    if (pm25 >= 51 && pm25 <= 100.9) return createIcon("indikator_sedang.png");
+    if (pm25 >= 101 && pm25 <= 199.9) return createIcon("indikator_tidak_sehat.png");
+    if (pm25 >= 200 && pm25 <= 299.9) return createIcon("indikator_sangat_tidak_sehat.png");
+    if (pm25 >= 300) return createIcon("indikator_berbahaya.png");
     return createIcon("indikator_null.png");
   };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const pm25Response = await fetch("/api/pm25-stasiun", { cache: "no-store" });
+        const pm25Response = await fetch("/api/pm25-aktual", { cache: "no-store" });
         if (!pm25Response.ok) throw new Error(`PM2.5 fetch failed: ${pm25Response.status}`);
         const pm25RawText = await pm25Response.text();
         const pm25CleanText = pm25RawText.replace(/NaN/g, "null");
@@ -73,7 +78,6 @@ const StasiunPM25 = () => {
         if (Array.isArray(pm25Data)) {
           setStations(pm25Data);
         } else {
-          console.warn("PM2.5 data bukan array:", pm25Data);
           setStations([]);
           const errorMessage = pm25Data.message?.includes("Tidak ada data PM2.5")
             ? "Tidak ada data PM2.5 tersedia untuk tanggal ini"
@@ -86,12 +90,11 @@ const StasiunPM25 = () => {
         const weather = await weatherResponse.json();
         setWeatherData(Array.isArray(weather) ? weather : []);
 
-        const boundaryResponse = await fetch("/data/batas-jakarta.json");
+        const boundaryResponse = await fetch("/data/batas_kelurahan_jakarta.geojson");
         if (!boundaryResponse.ok) throw new Error(`Boundary fetch failed: ${boundaryResponse.status}`);
         const boundaryData = await boundaryResponse.json();
         setBoundaryJakarta(boundaryData);
       } catch (err) {
-        console.error("Fetch error:", err);
         setError("Terjadi kesalahan saat memuat data peta");
       } finally {
         setLoading(false);
@@ -122,8 +125,11 @@ const StasiunPM25 = () => {
 
   if (loading) {
     return (
-      <div className="h-full w-full flex items-center justify-center">
-        <div>Loading station data...</div>
+      <div className="h-full w-full flex items-center justify-center bg-gray-100">
+        <div className="flex flex-col items-center gap-4">
+          <div className={styles.spinner}></div>
+          <span className="text-lg font-medium text-gray-700">Memuat data stasiun...</span>
+        </div>
       </div>
     );
   }
@@ -132,13 +138,26 @@ const StasiunPM25 = () => {
     <>
       <Navbar />
       <div className={`relative ${isSplitView ? "h-screen" : "h-full"} w-full`}>
+        {error && (
+          <div className={styles.alert}>
+            <div className={styles.alertContent}>
+              <span className="text-red-500 font-semibold">{error}</span>
+              <button
+                onClick={() => setError(null)}
+                className="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        )}
         <div className={`flex h-full ${isSplitView ? "flex-row" : ""}`}>
           <div className={`${isSplitView ? "w-1/2" : "w-full"} h-full relative`}>
             <MapContainer
               center={[-6.1754, 106.8272]}
               zoom={12}
-              minZoom={11}
-              maxZoom={17}
+              minZoom={12}
+              maxZoom={16}
               maxBounds={[
                 [-6.45, 106.55],
                 [-5.9, 107.15],
@@ -158,7 +177,7 @@ const StasiunPM25 = () => {
                   data={boundaryJakarta}
                   style={() => ({
                     color: "#257285",
-                    weight: 1,
+                    weight: 0.3,
                     fillColor: "#FFFFFF",
                     fillOpacity: 0.01,
                   })}
@@ -191,26 +210,26 @@ const StasiunPM25 = () => {
                             backgroundColor:
                               station.pm25_value === null || isNaN(station.pm25_value)
                                 ? "#6c757d"
-                                : station.pm25_value <= 15.5
+                                : station.pm25_value <= 50.9
                                 ? "#00CC00"
-                                : station.pm25_value <= 55.4
+                                : station.pm25_value <= 100.9
                                 ? "#0133FF"
-                                : station.pm25_value <= 150.4
+                                : station.pm25_value <= 199.9
                                 ? "#FFC900"
-                                : station.pm25_value <= 250.4
+                                : station.pm25_value <= 299.9
                                 ? "#FF0000"
                                 : "#000000",
                           }}
                         >
                           {station.pm25_value === null || isNaN(station.pm25_value)
                             ? "Kualitas: Tidak tersedia"
-                            : station.pm25_value <= 15.5
+                            : station.pm25_value <= 50.9
                             ? "Kualitas: BAIK"
-                            : station.pm25_value <= 55.4
+                            : station.pm25_value <= 100.9
                             ? "Kualitas: SEDANG"
-                            : station.pm25_value <= 150.4
+                            : station.pm25_value <= 199.9
                             ? "Kualitas: TIDAK SEHAT"
-                            : station.pm25_value <= 250.4
+                            : station.pm25_value <= 299.9
                             ? "Kualitas: SANGAT TIDAK SEHAT"
                             : "Kualitas: BERBAHAYA"}
                         </div>
@@ -223,7 +242,7 @@ const StasiunPM25 = () => {
                             <div>Kec. angin: {weather.wind_speed} km/h</div>
                           </div>
                         ) : (
-                          <div className="mt-2 text-sm italic text-gray-500">No weather data available</div>
+                          <div className="mt-2 text-sm italic text-gray-500">Data cuaca tidak tersedia</div>
                         )}
                       </Popup>
                     </Marker>
@@ -277,14 +296,6 @@ const StasiunPM25 = () => {
             </div>
           )}
         </div>
-
-        {error && (
-          <div className={styles.alert}>
-            <div className={styles.alertContent}>
-              <span className="text-red-500 font-semibold">{error}</span>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );
