@@ -257,6 +257,7 @@
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { MapContainer, TileLayer, useMap, GeoJSON } from "react-leaflet";
+import { GeoJsonObject } from "geojson";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.heat";
@@ -337,11 +338,11 @@ const JakartaMap = () => {
     if (mapRef.current) {
       mapRef.current.setView([-6.1754, 106.8272], 12);
     }
-  }, []);
+  }, []); // Mengganti _ dengan []
 
-  const fetchData = async (date?: string) => {
+  const fetchData = useCallback(async (date?: string) => {
     setIsLoading(true);
-    setError(null); // Reset error state before fetch
+    setError(null);
     try {
       let aodResponse;
       const today = getTodayDate();
@@ -385,11 +386,11 @@ const JakartaMap = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const date = e.target.value;
@@ -399,7 +400,7 @@ const JakartaMap = () => {
   };
 
   const handleCloseError = () => {
-    setError(null); // Close error overlay
+    setError(null);
   };
 
   const MapHandler = () => {
@@ -482,7 +483,7 @@ const JakartaMap = () => {
         {geoData && boundaryData && <HeatMapLayer geoData={stableGeoData} boundaryData={stableBoundaryData} selectedDate={selectedDate} isLoading={isLoading} inputRef={inputRef} />}
         {boundaryData && (
           <GeoJSON
-            data={boundaryData as any}
+            data={boundaryData as GeoJsonObject}
             style={styleBoundary}
             onEachFeature={(feature, layer) => {
               layer.on({
