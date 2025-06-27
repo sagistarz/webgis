@@ -337,14 +337,22 @@ interface HeatMapLayerProps {
   inputRef: React.RefObject<HTMLInputElement>;
 }
 
+interface RBushItem {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  featureIndex: number;
+}
+
 const HeatMapLayer = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }: HeatMapLayerProps) => {
   const map = useMap();
   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
   const tooltipRef = useRef<L.Tooltip | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
-  const interpolatedDataRef = useRef<any[]>([]);
-  const spatialIndexRef = useRef<RBush | null>(null);
+  const interpolatedDataRef = useRef<turf.Feature<turf.Point, { aod: number }>[]>([]);
+  const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
 
   const getTooltipContent = (aodValue: number | null, kelurahanName: string): string => {
     const formattedAodValue = aodValue !== null && aodValue > 0 ? aodValue.toFixed(4) : "No Data";
@@ -364,16 +372,12 @@ const HeatMapLayer = ({ geoData, boundaryData, selectedDate, isLoading, inputRef
 
   const cachedBoundaries = useMemo(() => {
     if (!geoData) return turf.featureCollection([]);
-    return turf.featureCollection(
-      geoData.features
-        .filter((f) => f.properties.aod_value != null && f.properties.aod_value > 0) // Exclude aod_value of 0
-        .map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" }))
-    );
+    return turf.featureCollection(geoData.features.filter((f) => f.properties.aod_value != null && f.properties.aod_value > 0).map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" })));
   }, [geoData]);
 
   useMemo(() => {
     if (!boundaryData) return;
-    const spatialIndex = new RBush();
+    const spatialIndex = new RBush<RBushItem>();
     boundaryData.features.forEach((feature, index) => {
       const bbox = turf.bbox(feature.geometry);
       spatialIndex.insert({
@@ -392,7 +396,7 @@ const HeatMapLayer = ({ geoData, boundaryData, selectedDate, isLoading, inputRef
       .map((feature) => {
         const centroid = turf.centroid(feature.geometry);
         const aod = feature.properties.aod_value;
-        if (aod == null || aod <= 0 || isNaN(aod)) return null; // Treat aod_value of 0 as "No Data"
+        if (aod == null || aod <= 0 || isNaN(aod)) return null;
         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], aod];
       })
       .filter((p): p is [number, number, number] => p !== null);
@@ -404,12 +408,8 @@ const HeatMapLayer = ({ geoData, boundaryData, selectedDate, isLoading, inputRef
     let interpolated = turf.featureCollection([]);
     if (points.length > 0) {
       try {
-        interpolated = turf.interpolate(
-          turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { aod: p[2] }))),
-          cellSize / 4,
-          { gridType: "point", property: "aod", units: "degrees", weight: 2.5 }
-        );
-      } catch (e) {
+        interpolated = turf.interpolate(turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { aod: p[2] }))), cellSize / 4, { gridType: "point", property: "aod", units: "degrees", weight: 2.5 });
+      } catch {
         return { imageUrl: null, bbox: [0, 0, 0, 0] };
       }
     }
@@ -445,7 +445,7 @@ const HeatMapLayer = ({ geoData, boundaryData, selectedDate, isLoading, inputRef
           },
           { dist: Infinity, value: 0 }
         );
-        aodValue = closest.value > 0 ? closest.value : null; // Treat interpolated values of 0 as "No Data"
+        aodValue = closest.value > 0 ? closest.value : null;
       } else {
         const aodFeature = geoData.features.find((f) => {
           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
@@ -520,7 +520,7 @@ const HeatMapLayer = ({ geoData, boundaryData, selectedDate, isLoading, inputRef
           }) || [];
 
         const kelurahan = boundaryData.features.find((bf, index) => {
-          if (!candidates.some((c: any) => c.featureIndex === index)) return false;
+          if (!candidates.some((c) => c.featureIndex === index)) return false;
           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
           return turf.booleanPointInPolygon(point, polygon);
         });
