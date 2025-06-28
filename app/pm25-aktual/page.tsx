@@ -560,7 +560,7 @@ const StasiunPM25 = () => {
 
           {isSplitView && selectedStation && (
             <div className="w-1/2 h-full overflow-auto">
-              <Calendar location={selectedStation} isSplitView={true} showRightPanel={false} showHeader={false} />
+              <Calendar location={selectedStation} isSplitView={true} showRightPanel={false} />
             </div>
           )}
         </div>
