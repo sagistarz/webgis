@@ -1,40 +1,2065 @@
+// // // // // // // // // // // // // // // // "use client";
+
+// // // // // // // // // // // // // // // // import { useEffect, useRef, useMemo } from "react";
+// // // // // // // // // // // // // // // // import { useMap } from "react-leaflet";
+// // // // // // // // // // // // // // // // import L from "leaflet";
+// // // // // // // // // // // // // // // // import * as turf from "@turf/turf";
+// // // // // // // // // // // // // // // // import RBush from "rbush";
+// // // // // // // // // // // // // // // // import styles from "./map.module.css";
+
+// // // // // // // // // // // // // // // // interface FeatureProperties {
+// // // // // // // // // // // // // // // //   pm25_value: number;
+// // // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // // interface BoundaryProperties {
+// // // // // // // // // // // // // // // //   NAMOBJ: string;
+// // // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // // interface Feature {
+// // // // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // // // //   id: number;
+// // // // // // // // // // // // // // // //   properties: FeatureProperties;
+// // // // // // // // // // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
+// // // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // // interface BoundaryFeature {
+// // // // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // // // //   properties: BoundaryProperties;
+// // // // // // // // // // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
+// // // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // // interface GeoJSONData {
+// // // // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // // // //   features: Feature[];
+// // // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // // interface BoundaryGeoJSONData {
+// // // // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // // // //   features: BoundaryFeature[];
+// // // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // // interface HeatMapLayerProps {
+// // // // // // // // // // // // // // // //   geoData: GeoJSONData | null;
+// // // // // // // // // // // // // // // //   boundaryData: BoundaryGeoJSONData | null;
+// // // // // // // // // // // // // // // //   selectedDate: string;
+// // // // // // // // // // // // // // // //   isLoading: boolean;
+// // // // // // // // // // // // // // // //   inputRef: React.RefObject<HTMLInputElement>;
+// // // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // // const interpolateColor = (value: number): string => {
+// // // // // // // // // // // // // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
+// // // // // // // // // // // // // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
+// // // // // // // // // // // // // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
+// // // // // // // // // // // // // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
+// // // // // // // // // // // // // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // // // // // // // // // // // // // };
+
+// // // // // // // // // // // // // // // // const HeatMapLayer = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }: HeatMapLayerProps) => {
+// // // // // // // // // // // // // // // //   const map = useMap();
+// // // // // // // // // // // // // // // //   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
+// // // // // // // // // // // // // // // //   const tooltipRef = useRef<L.Tooltip | null>(null);
+// // // // // // // // // // // // // // // //   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+// // // // // // // // // // // // // // // //   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
+// // // // // // // // // // // // // // // //   const interpolatedDataRef = useRef<any[]>([]);
+// // // // // // // // // // // // // // // //   const spatialIndexRef = useRef<RBush | null>(null);
+
+// // // // // // // // // // // // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
+// // // // // // // // // // // // // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
+// // // // // // // // // // // // // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
+// // // // // // // // // // // // // // // //     // Warna teks hanya untuk nilai PM2.5, nama kelurahan tetap default (#374151 dari CSS)
+// // // // // // // // // // // // // // // //     const textColor = (pm25Color === "#00ff00" || pm25Color === "#ffff00") ? "#000000" : "#ffffff";
+// // // // // // // // // // // // // // // //     return `
+// // // // // // // // // // // // // // // //       <div class="${styles.customTooltip}">
+// // // // // // // // // // // // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
+// // // // // // // // // // // // // // // //         <div class="${styles.aodContainer}">
+// // // // // // // // // // // // // // // //           <div class="${styles.aodCircle}" style="background-color: ${pm25Color}; color: ${textColor}">
+// // // // // // // // // // // // // // // //             ${formattedPM25Value}
+// // // // // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // // // // //       </div>
+// // // // // // // // // // // // // // // //     `;
+// // // // // // // // // // // // // // // //   };
+
+// // // // // // // // // // // // // // // //   const cachedBoundaries = useMemo(() => {
+// // // // // // // // // // // // // // // //     if (!geoData) return turf.featureCollection([]);
+// // // // // // // // // // // // // // // //     return turf.featureCollection(geoData.features.filter((f) => f.properties.pm25_value != null && f.properties.pm25_value >= 0).map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" })));
+// // // // // // // // // // // // // // // //   }, [geoData]);
+
+// // // // // // // // // // // // // // // //   const initializeSpatialIndex = useMemo(() => {
+// // // // // // // // // // // // // // // //     if (!boundaryData) return () => {};
+// // // // // // // // // // // // // // // //     const spatialIndex = new RBush();
+// // // // // // // // // // // // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // // // // // // // // // // // // //       const bbox = turf.bbox(feature.geometry);
+// // // // // // // // // // // // // // // //       spatialIndex.insert({
+// // // // // // // // // // // // // // // //         minX: bbox[0],
+// // // // // // // // // // // // // // // //         minY: bbox[1],
+// // // // // // // // // // // // // // // //         maxX: bbox[2],
+// // // // // // // // // // // // // // // //         maxY: bbox[3],
+// // // // // // // // // // // // // // // //         featureIndex: index,
+// // // // // // // // // // // // // // // //       });
+// // // // // // // // // // // // // // // //     });
+// // // // // // // // // // // // // // // //     spatialIndexRef.current = spatialIndex;
+// // // // // // // // // // // // // // // //     return () => {
+// // // // // // // // // // // // // // // //       spatialIndexRef.current = null;
+// // // // // // // // // // // // // // // //     };
+// // // // // // // // // // // // // // // //   }, [boundaryData]);
+
+// // // // // // // // // // // // // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // // // // // // // // // // // // // //     const points = geoData.features
+// // // // // // // // // // // // // // // //       .map((feature) => {
+// // // // // // // // // // // // // // // //         const centroid = turf.centroid(feature.geometry);
+// // // // // // // // // // // // // // // //         const pm25 = feature.properties.pm25_value;
+// // // // // // // // // // // // // // // //         if (pm25 == null || pm25 < 0 || isNaN(pm25)) return null;
+// // // // // // // // // // // // // // // //         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
+// // // // // // // // // // // // // // // //       })
+// // // // // // // // // // // // // // // //       .filter((p): p is [number, number, number] => p !== null);
+
+// // // // // // // // // // // // // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // // // // // // // // // // // // //     const cellSize = 0.02;
+// // // // // // // // // // // // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
+
+// // // // // // // // // // // // // // // //     let interpolated = turf.featureCollection([]);
+// // // // // // // // // // // // // // // //     if (points.length > 0) {
+// // // // // // // // // // // // // // // //       try {
+// // // // // // // // // // // // // // // //         interpolated = turf.interpolate(turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { pm25: p[2] }))), cellSize / 4, { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 });
+// // // // // // // // // // // // // // // //       } catch (error) {
+// // // // // // // // // // // // // // // //         console.error("Interpolation error:", error);
+// // // // // // // // // // // // // // // //         return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // // // // // //       }
+// // // // // // // // // // // // // // // //     }
+// // // // // // // // // // // // // // // //     interpolatedDataRef.current = interpolated.features;
+
+// // // // // // // // // // // // // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // // // // // // // // // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
+
+// // // // // // // // // // // // // // // //     const canvas = document.createElement("canvas");
+// // // // // // // // // // // // // // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
+// // // // // // // // // // // // // // // //     const height = Math.ceil((bbox[3] - bbox[1]) / cellSize);
+// // // // // // // // // // // // // // // //     canvas.width = width;
+// // // // // // // // // // // // // // // //     canvas.height = height;
+// // // // // // // // // // // // // // // //     const ctx = canvas.getContext("2d");
+
+// // // // // // // // // // // // // // // //     if (!ctx) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+
+// // // // // // // // // // // // // // // //     ctx.fillStyle = "rgba(0, 0, 0, 0)";
+// // // // // // // // // // // // // // // //     ctx.fillRect(0, 0, width, height);
+
+// // // // // // // // // // // // // // // //     clipped.features.forEach((feature) => {
+// // // // // // // // // // // // // // // //       const coords = feature.geometry.coordinates;
+// // // // // // // // // // // // // // // //       const point = turf.point(coords);
+
+// // // // // // // // // // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+
+// // // // // // // // // // // // // // // //       let pm25Value: number | null = null;
+// // // // // // // // // // // // // // // //       if (inBuffer && interpolated.features.length > 0) {
+// // // // // // // // // // // // // // // //         const closest = interpolated.features.reduce(
+// // // // // // // // // // // // // // // //           (acc, f) => {
+// // // // // // // // // // // // // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // // // // // // // // // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
+// // // // // // // // // // // // // // // //           },
+// // // // // // // // // // // // // // // //           { dist: Infinity, value: 0 }
+// // // // // // // // // // // // // // // //         );
+// // // // // // // // // // // // // // // //         pm25Value = closest.value;
+// // // // // // // // // // // // // // // //       } else {
+// // // // // // // // // // // // // // // //         const pm25Feature = geoData.features.find((f) => {
+// // // // // // // // // // // // // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
+// // // // // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // // // // //         });
+// // // // // // // // // // // // // // // //         pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && pm25Feature.properties.pm25_value >= 0 ? pm25Feature.properties.pm25_value : null;
+// // // // // // // // // // // // // // // //       }
+
+// // // // // // // // // // // // // // // //       if (pm25Value == null) return;
+
+// // // // // // // // // // // // // // // //       const color = interpolateColor(pm25Value);
+// // // // // // // // // // // // // // // //       const x = Math.round((coords[0] - bbox[0]) / cellSize);
+// // // // // // // // // // // // // // // //       const y = Math.round((bbox[3] - coords[1]) / cellSize);
+// // // // // // // // // // // // // // // //       ctx.fillStyle = color;
+// // // // // // // // // // // // // // // //       ctx.fillRect(x, y, 1, 1);
+// // // // // // // // // // // // // // // //     });
+
+// // // // // // // // // // // // // // // //     return { imageUrl: canvas.toDataURL(), bbox };
+// // // // // // // // // // // // // // // //   };
+
+// // // // // // // // // // // // // // // //   const cachedGrid = useMemo(() => {
+// // // // // // // // // // // // // // // //     if (!geoData || !boundaryData) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // // // // // //     return generateStaticGrid(geoData, boundaryData);
+// // // // // // // // // // // // // // // //   }, [geoData, boundaryData]);
+
+// // // // // // // // // // // // // // // //   useEffect(() => {
+// // // // // // // // // // // // // // // //     if (!map || !geoData || !boundaryData) {
+// // // // // // // // // // // // // // // //       return;
+// // // // // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // // // // //     const { imageUrl, bbox } = cachedGrid;
+
+// // // // // // // // // // // // // // // //     if (staticLayerRef.current) {
+// // // // // // // // // // // // // // // //       map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // // // // // // //       staticLayerRef.current = null;
+// // // // // // // // // // // // // // // //     }
+// // // // // // // // // // // // // // // //     if (tooltipRef.current) {
+// // // // // // // // // // // // // // // //       tooltipRef.current.remove();
+// // // // // // // // // // // // // // // //       tooltipRef.current = null;
+// // // // // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // // // // //     if (imageUrl) {
+// // // // // // // // // // // // // // // //       const bounds = [
+// // // // // // // // // // // // // // // //         [bbox[1], bbox[0]],
+// // // // // // // // // // // // // // // //         [bbox[3], bbox[2]],
+// // // // // // // // // // // // // // // //       ];
+// // // // // // // // // // // // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
+// // // // // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
+// // // // // // // // // // // // // // // //       if (document.activeElement === inputRef.current) {
+// // // // // // // // // // // // // // // //         return;
+// // // // // // // // // // // // // // // //       }
+// // // // // // // // // // // // // // // //       const { lat, lng } = e.latlng;
+// // // // // // // // // // // // // // // //       if (lastPosition.current && Math.abs(lastPosition.current.lat - lat) < 0.0001 && Math.abs(lastPosition.current.lng - lng) < 0.0001) {
+// // // // // // // // // // // // // // // //         return;
+// // // // // // // // // // // // // // // //       }
+// // // // // // // // // // // // // // // //       lastPosition.current = { lat, lng };
+
+// // // // // // // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+// // // // // // // // // // // // // // // //       timeoutRef.current = setTimeout(() => {
+// // // // // // // // // // // // // // // //         if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // // // // // // //         const point = turf.point([lng, lat]);
+
+// // // // // // // // // // // // // // // //         const candidates =
+// // // // // // // // // // // // // // // //           spatialIndexRef.current?.search({
+// // // // // // // // // // // // // // // //             minX: lng,
+// // // // // // // // // // // // // // // //             minY: lat,
+// // // // // // // // // // // // // // // //             maxX: lng,
+// // // // // // // // // // // // // // // //             maxY: lat,
+// // // // // // // // // // // // // // // //           }) || [];
+
+// // // // // // // // // // // // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
+// // // // // // // // // // // // // // // //           if (!candidates.some((c: any) => c.featureIndex === index)) return false;
+// // // // // // // // // // // // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
+// // // // // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // // // // //         });
+
+// // // // // // // // // // // // // // // //         const pm25Feature = geoData.features.find((feature) => {
+// // // // // // // // // // // // // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(feature.geometry.coordinates);
+// // // // // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // // // // //         });
+// // // // // // // // // // // // // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+
+// // // // // // // // // // // // // // // //         if (kelurahan?.properties) {
+// // // // // // // // // // // // // // // //           tooltipRef.current = L.tooltip({
+// // // // // // // // // // // // // // // //             sticky: true,
+// // // // // // // // // // // // // // // //             direction: "top",
+// // // // // // // // // // // // // // // //             offset: [0, -20],
+// // // // // // // // // // // // // // // //             className: styles.customTooltip,
+// // // // // // // // // // // // // // // //           })
+// // // // // // // // // // // // // // // //             .setLatLng(e.latlng)
+// // // // // // // // // // // // // // // //             .setContent(getTooltipContent(pm25Value, kelurahan.properties.NAMOBJ))
+// // // // // // // // // // // // // // // //             .addTo(map);
+// // // // // // // // // // // // // // // //         }
+// // // // // // // // // // // // // // // //       }, 500);
+// // // // // // // // // // // // // // // //     };
+
+// // // // // // // // // // // // // // // //     map.on("mousemove", handleMouseMove);
+
+// // // // // // // // // // // // // // // //     return () => {
+// // // // // // // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+// // // // // // // // // // // // // // // //       map.off("mousemove", handleMouseMove);
+// // // // // // // // // // // // // // // //       if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // // // // // // //       if (staticLayerRef.current) map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // // // // // // //     };
+// // // // // // // // // // // // // // // //   }, [map, cachedGrid, selectedDate, inputRef]);
+
+// // // // // // // // // // // // // // // //   return (
+// // // // // // // // // // // // // // // //     <>
+// // // // // // // // // // // // // // // //       {isLoading && (
+// // // // // // // // // // // // // // // //         <div className={styles.loadingOverlay}>
+// // // // // // // // // // // // // // // //           <div className={styles.spinner}></div>
+// // // // // // // // // // // // // // // //           <span>Memuat Heatmap...</span>
+// // // // // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // // // // //       )}
+// // // // // // // // // // // // // // // //       <div className={styles.legend}>
+// // // // // // // // // // // // // // // //         <h4>Indikator PM2.5 (µg/m³)</h4>
+// // // // // // // // // // // // // // // //         <div className={styles.gradientLegend}>
+// // // // // // // // // // // // // // // //           <div
+// // // // // // // // // // // // // // // //             className={styles.gradientBar}
+// // // // // // // // // // // // // // // //             style={{
+// // // // // // // // // // // // // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // // // // // // // // // // // // //             }}
+// // // // // // // // // // // // // // // //           ></div>
+// // // // // // // // // // // // // // // //           <div className={styles.gradientLabels}>
+// // // // // // // // // // // // // // // //             <span>0</span>
+// // // // // // // // // // // // // // // //             <span>300+</span>
+// // // // // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // // // // //           <div className={styles.legendLabels}>
+// // // // // // // // // // // // // // // //             <span>Baik (0 - 50)</span>
+// // // // // // // // // // // // // // // //             <span>Sedang (51 - 100)</span>
+// // // // // // // // // // // // // // // //             <span>Tidak Sehat (101 - 199)</span>
+// // // // // // // // // // // // // // // //             <span>Sangat Tidak Sehat (200 - 299)</span>
+// // // // // // // // // // // // // // // //             <span>Berbahaya (&gt; 300)</span>
+// // // // // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // // // // //       </div>
+// // // // // // // // // // // // // // // //     </>
+// // // // // // // // // // // // // // // //   );
+// // // // // // // // // // // // // // // // };
+
+// // // // // // // // // // // // // // // // export default HeatMapLayer;
+
+// // // // // // // // // // // // // // // "use client";
+
+// // // // // // // // // // // // // // // import { useEffect, useRef, useMemo } from "react";
+// // // // // // // // // // // // // // // import { useMap } from "react-leaflet";
+// // // // // // // // // // // // // // // import L from "leaflet";
+// // // // // // // // // // // // // // // import * as turf from "@turf/turf";
+// // // // // // // // // // // // // // // import RBush from "rbush";
+// // // // // // // // // // // // // // // import styles from "./map.module.css";
+
+// // // // // // // // // // // // // // // interface FeatureProperties {
+// // // // // // // // // // // // // // //   pm25_value: number;
+// // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // interface BoundaryProperties {
+// // // // // // // // // // // // // // //   NAMOBJ: string;
+// // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // interface Feature {
+// // // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // // //   id: number;
+// // // // // // // // // // // // // // //   properties: FeatureProperties;
+// // // // // // // // // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
+// // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // interface BoundaryFeature {
+// // // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // // //   properties: BoundaryProperties;
+// // // // // // // // // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
+// // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // interface GeoJSONData {
+// // // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // // //   features: Feature[];
+// // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // interface BoundaryGeoJSONData {
+// // // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // // //   features: BoundaryFeature[];
+// // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // interface HeatMapLayerProps {
+// // // // // // // // // // // // // // //   geoData: GeoJSONData | null;
+// // // // // // // // // // // // // // //   boundaryData: BoundaryGeoJSONData | null;
+// // // // // // // // // // // // // // //   selectedDate: string;
+// // // // // // // // // // // // // // //   isLoading: boolean;
+// // // // // // // // // // // // // // //   inputRef: React.RefObject<HTMLInputElement>;
+// // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // // Type for RBush spatial index items
+// // // // // // // // // // // // // // // interface RBushItem {
+// // // // // // // // // // // // // // //   minX: number;
+// // // // // // // // // // // // // // //   minY: number;
+// // // // // // // // // // // // // // //   maxX: number;
+// // // // // // // // // // // // // // //   maxY: number;
+// // // // // // // // // // // // // // //   featureIndex: number;
+// // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // // Type for interpolated features
+// // // // // // // // // // // // // // // interface InterpolatedFeature {
+// // // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // // //   geometry: turf.Point;
+// // // // // // // // // // // // // // //   properties: { pm25: number };
+// // // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // // const interpolateColor = (value: number): string => {
+// // // // // // // // // // // // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
+// // // // // // // // // // // // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
+// // // // // // // // // // // // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
+// // // // // // // // // // // // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
+// // // // // // // // // // // // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // // // // // // // // // // // // };
+
+// // // // // // // // // // // // // // // const HeatMapLayer = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }: HeatMapLayerProps) => {
+// // // // // // // // // // // // // // //   const map = useMap();
+// // // // // // // // // // // // // // //   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
+// // // // // // // // // // // // // // //   const tooltipRef = useRef<L.Tooltip | null>(null);
+// // // // // // // // // // // // // // //   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+// // // // // // // // // // // // // // //   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
+// // // // // // // // // // // // // // //   const interpolatedDataRef = useRef<InterpolatedFeature[]>([]);
+// // // // // // // // // // // // // // //   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
+
+// // // // // // // // // // // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
+// // // // // // // // // // // // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
+// // // // // // // // // // // // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
+// // // // // // // // // // // // // // //     // Warna teks hanya untuk nilai PM2.5, nama kelurahan tetap default (#374151 dari CSS)
+// // // // // // // // // // // // // // //     const textColor = pm25Color === "#00ff00" || pm25Color === "#ffff00" ? "#000000" : "#ffffff";
+// // // // // // // // // // // // // // //     return `
+// // // // // // // // // // // // // // //       <div class="${styles.customTooltip}">
+// // // // // // // // // // // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
+// // // // // // // // // // // // // // //         <div class="${styles.aodContainer}">
+// // // // // // // // // // // // // // //           <div class="${styles.aodCircle}" style="background-color: ${pm25Color}; color: ${textColor}">
+// // // // // // // // // // // // // // //             ${formattedPM25Value}
+// // // // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // // // //       </div>
+// // // // // // // // // // // // // // //     `;
+// // // // // // // // // // // // // // //   };
+
+// // // // // // // // // // // // // // //   const cachedBoundaries = useMemo(() => {
+// // // // // // // // // // // // // // //     if (!geoData) return turf.featureCollection([]);
+// // // // // // // // // // // // // // //     return turf.featureCollection(
+// // // // // // // // // // // // // // //       geoData.features
+// // // // // // // // // // // // // // //         .filter((f) => f.properties.pm25_value != null && f.properties.pm25_value >= 0)
+// // // // // // // // // // // // // // //         .map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" }))
+// // // // // // // // // // // // // // //     );
+// // // // // // // // // // // // // // //   }, [geoData]);
+
+// // // // // // // // // // // // // // //   useEffect(() => {
+// // // // // // // // // // // // // // //     if (!boundaryData) return;
+// // // // // // // // // // // // // // //     const spatialIndex = new RBush<RBushItem>();
+// // // // // // // // // // // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // // // // // // // // // // // //       const bbox = turf.bbox(feature.geometry);
+// // // // // // // // // // // // // // //       spatialIndex.insert({
+// // // // // // // // // // // // // // //         minX: bbox[0],
+// // // // // // // // // // // // // // //         minY: bbox[1],
+// // // // // // // // // // // // // // //         maxX: bbox[2],
+// // // // // // // // // // // // // // //         maxY: bbox[3],
+// // // // // // // // // // // // // // //         featureIndex: index,
+// // // // // // // // // // // // // // //       });
+// // // // // // // // // // // // // // //     });
+// // // // // // // // // // // // // // //     spatialIndexRef.current = spatialIndex;
+
+// // // // // // // // // // // // // // //     return () => {
+// // // // // // // // // // // // // // //       spatialIndexRef.current = null;
+// // // // // // // // // // // // // // //     };
+// // // // // // // // // // // // // // //   }, [boundaryData]);
+
+// // // // // // // // // // // // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // // // // // // // // // // // // //     const points = geoData.features
+// // // // // // // // // // // // // // //       .map((feature) => {
+// // // // // // // // // // // // // // //         const centroid = turf.centroid(feature.geometry);
+// // // // // // // // // // // // // // //         const pm25 = feature.properties.pm25_value;
+// // // // // // // // // // // // // // //         if (pm25 == null || pm25 < 0 || isNaN(pm25)) return null;
+// // // // // // // // // // // // // // //         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
+// // // // // // // // // // // // // // //       })
+// // // // // // // // // // // // // // //       .filter((p): p is [number, number, number] => p !== null);
+
+// // // // // // // // // // // // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // // // // // // // // // // // //     const cellSize = 0.02;
+// // // // // // // // // // // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
+
+// // // // // // // // // // // // // // //     let interpolated = turf.featureCollection([]);
+// // // // // // // // // // // // // // //     if (points.length > 0) {
+// // // // // // // // // // // // // // //       try {
+// // // // // // // // // // // // // // //         interpolated = turf.interpolate(
+// // // // // // // // // // // // // // //           turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { pm25: p[2] }))),
+// // // // // // // // // // // // // // //           cellSize / 4,
+// // // // // // // // // // // // // // //           { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 }
+// // // // // // // // // // // // // // //         );
+// // // // // // // // // // // // // // //       } catch (error) {
+// // // // // // // // // // // // // // //         console.error("Interpolation error:", error);
+// // // // // // // // // // // // // // //         return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // // // // //       }
+// // // // // // // // // // // // // // //     }
+// // // // // // // // // // // // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
+
+// // // // // // // // // // // // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // // // // // // // // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
+
+// // // // // // // // // // // // // // //     const canvas = document.createElement("canvas");
+// // // // // // // // // // // // // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
+// // // // // // // // // // // // // // //     const height = Math.ceil((bbox[3] - bbox[1]) / cellSize);
+// // // // // // // // // // // // // // //     canvas.width = width;
+// // // // // // // // // // // // // // //     canvas.height = height;
+// // // // // // // // // // // // // // //     const ctx = canvas.getContext("2d");
+
+// // // // // // // // // // // // // // //     if (!ctx) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+
+// // // // // // // // // // // // // // //     ctx.fillStyle = "rgba(0, 0, 0, 0)";
+// // // // // // // // // // // // // // //     ctx.fillRect(0, 0, width, height);
+
+// // // // // // // // // // // // // // //     clipped.features.forEach((feature) => {
+// // // // // // // // // // // // // // //       const coords = feature.geometry.coordinates;
+// // // // // // // // // // // // // // //       const point = turf.point(coords);
+
+// // // // // // // // // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+
+// // // // // // // // // // // // // // //       let pm25Value: number | null = null;
+// // // // // // // // // // // // // // //       if (inBuffer && interpolated.features.length > 0) {
+// // // // // // // // // // // // // // //         const closest = interpolated.features.reduce(
+// // // // // // // // // // // // // // //           (acc, f) => {
+// // // // // // // // // // // // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // // // // // // // // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
+// // // // // // // // // // // // // // //           },
+// // // // // // // // // // // // // // //           { dist: Infinity, value: 0 }
+// // // // // // // // // // // // // // //         );
+// // // // // // // // // // // // // // //         pm25Value = closest.value;
+// // // // // // // // // // // // // // //       } else {
+// // // // // // // // // // // // // // //         const pm25Feature = geoData.features.find((f) => {
+// // // // // // // // // // // // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
+// // // // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // // // //         });
+// // // // // // // // // // // // // // //         pm25Value =
+// // // // // // // // // // // // // // //           pm25Feature && pm25Feature.properties.pm25_value != null && pm25Feature.properties.pm25_value >= 0
+// // // // // // // // // // // // // // //             ? pm25Feature.properties.pm25_value
+// // // // // // // // // // // // // // //             : null;
+// // // // // // // // // // // // // // //       }
+
+// // // // // // // // // // // // // // //       if (pm25Value == null) return;
+
+// // // // // // // // // // // // // // //       const color = interpolateColor(pm25Value);
+// // // // // // // // // // // // // // //       const x = Math.round((coords[0] - bbox[0]) / cellSize);
+// // // // // // // // // // // // // // //       const y = Math.round((bbox[3] - coords[1]) / cellSize);
+// // // // // // // // // // // // // // //       ctx.fillStyle = color;
+// // // // // // // // // // // // // // //       ctx.fillRect(x, y, 1, 1);
+// // // // // // // // // // // // // // //     });
+
+// // // // // // // // // // // // // // //     return { imageUrl: canvas.toDataURL(), bbox };
+// // // // // // // // // // // // // // //   };
+
+// // // // // // // // // // // // // // //   const cachedGrid = useMemo(() => {
+// // // // // // // // // // // // // // //     if (!geoData || !boundaryData) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // // // // //     return generateStaticGrid(geoData, boundaryData);
+// // // // // // // // // // // // // // //   }, [geoData, boundaryData]);
+
+// // // // // // // // // // // // // // //   useEffect(() => {
+// // // // // // // // // // // // // // //     if (!map || !geoData || !boundaryData) {
+// // // // // // // // // // // // // // //       return;
+// // // // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // // // //     const { imageUrl, bbox } = cachedGrid;
+
+// // // // // // // // // // // // // // //     if (staticLayerRef.current) {
+// // // // // // // // // // // // // // //       map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // // // // // //       staticLayerRef.current = null;
+// // // // // // // // // // // // // // //     }
+// // // // // // // // // // // // // // //     if (tooltipRef.current) {
+// // // // // // // // // // // // // // //       tooltipRef.current.remove();
+// // // // // // // // // // // // // // //       tooltipRef.current = null;
+// // // // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // // // //     if (imageUrl) {
+// // // // // // // // // // // // // // //       const bounds = [
+// // // // // // // // // // // // // // //         [bbox[1], bbox[0]],
+// // // // // // // // // // // // // // //         [bbox[3], bbox[2]],
+// // // // // // // // // // // // // // //       ];
+// // // // // // // // // // // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
+// // // // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
+// // // // // // // // // // // // // // //       if (document.activeElement === inputRef.current) {
+// // // // // // // // // // // // // // //         return;
+// // // // // // // // // // // // // // //       }
+// // // // // // // // // // // // // // //       const { lat, lng } = e.latlng;
+// // // // // // // // // // // // // // //       if (lastPosition.current && Math.abs(lastPosition.current.lat - lat) < 0.0001 && Math.abs(lastPosition.current.lng - lng) < 0.0001) {
+// // // // // // // // // // // // // // //         return;
+// // // // // // // // // // // // // // //       }
+// // // // // // // // // // // // // // //       lastPosition.current = { lat, lng };
+
+// // // // // // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+// // // // // // // // // // // // // // //       timeoutRef.current = setTimeout(() => {
+// // // // // // // // // // // // // // //         if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // // // // // //         const point = turf.point([lng, lat]);
+
+// // // // // // // // // // // // // // //         const candidates = spatialIndexRef.current?.search({
+// // // // // // // // // // // // // // //           minX: lng,
+// // // // // // // // // // // // // // //           minY: lat,
+// // // // // // // // // // // // // // //           maxX: lng,
+// // // // // // // // // // // // // // //           maxY: lat,
+// // // // // // // // // // // // // // //         }) || [];
+
+// // // // // // // // // // // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
+// // // // // // // // // // // // // // //           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
+// // // // // // // // // // // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
+// // // // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // // // //         });
+
+// // // // // // // // // // // // // // //         const pm25Feature = geoData.features.find((feature) => {
+// // // // // // // // // // // // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(feature.geometry.coordinates);
+// // // // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // // // //         });
+// // // // // // // // // // // // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+
+// // // // // // // // // // // // // // //         if (kelurahan?.properties) {
+// // // // // // // // // // // // // // //           tooltipRef.current = L.tooltip({
+// // // // // // // // // // // // // // //             sticky: true,
+// // // // // // // // // // // // // // //             direction: "top",
+// // // // // // // // // // // // // // //             offset: [0, -20],
+// // // // // // // // // // // // // // //             className: styles.customTooltip,
+// // // // // // // // // // // // // // //           })
+// // // // // // // // // // // // // // //             .setLatLng(e.latlng)
+// // // // // // // // // // // // // // //             .setContent(getTooltipContent(pm25Value, kelurahan.properties.NAMOBJ))
+// // // // // // // // // // // // // // //             .addTo(map);
+// // // // // // // // // // // // // // //         }
+// // // // // // // // // // // // // // //       }, 500);
+// // // // // // // // // // // // // // //     };
+
+// // // // // // // // // // // // // // //     map.on("mousemove", handleMouseMove);
+
+// // // // // // // // // // // // // // //     return () => {
+// // // // // // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+// // // // // // // // // // // // // // //       map.off("mousemove", handleMouseMove);
+// // // // // // // // // // // // // // //       if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // // // // // //       if (staticLayerRef.current) map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // // // // // //     };
+// // // // // // // // // // // // // // //   }, [map, cachedGrid, selectedDate, inputRef, geoData, boundaryData]);
+
+// // // // // // // // // // // // // // //   return (
+// // // // // // // // // // // // // // //     <>
+// // // // // // // // // // // // // // //       {isLoading && (
+// // // // // // // // // // // // // // //         <div className={styles.loadingOverlay}>
+// // // // // // // // // // // // // // //           <div className={styles.spinner}></div>
+// // // // // // // // // // // // // // //           <span>Memuat Heatmap...</span>
+// // // // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // // // //       )}
+// // // // // // // // // // // // // // //       <div className={styles.legend}>
+// // // // // // // // // // // // // // //         <h4>Indikator PM2.5 (µg/m³)</h4>
+// // // // // // // // // // // // // // //         <div className={styles.gradientLegend}>
+// // // // // // // // // // // // // // //           <div
+// // // // // // // // // // // // // // //             className={styles.gradientBar}
+// // // // // // // // // // // // // // //             style={{
+// // // // // // // // // // // // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // // // // // // // // // // // //             }}
+// // // // // // // // // // // // // // //           ></div>
+// // // // // // // // // // // // // // //           <div className={styles.gradientLabels}>
+// // // // // // // // // // // // // // //             <span>0</span>
+// // // // // // // // // // // // // // //             <span>300+</span>
+// // // // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // // // //           <div className={styles.legendLabels}>
+// // // // // // // // // // // // // // //             <span>Baik (0 - 50)</span>
+// // // // // // // // // // // // // // //             <span>Sedang (51 - 100)</span>
+// // // // // // // // // // // // // // //             <span>Tidak Sehat (101 - 199)</span>
+// // // // // // // // // // // // // // //             <span>Sangat Tidak Sehat (200 - 299)</span>
+// // // // // // // // // // // // // // //             <span>Berbahaya (&gt; 300)</span>
+// // // // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // // // //       </div>
+// // // // // // // // // // // // // // //     </>
+// // // // // // // // // // // // // // //   );
+// // // // // // // // // // // // // // // };
+
+// // // // // // // // // // // // // // // export default HeatMapLayer;
+// // // // // // // // // // // // // // "use client";
+
+// // // // // // // // // // // // // // import { useEffect, useRef, useMemo } from "react";
+// // // // // // // // // // // // // // import { useMap } from "react-leaflet";
+// // // // // // // // // // // // // // import L from "leaflet";
+// // // // // // // // // // // // // // import * as turf from "@turf/turf";
+// // // // // // // // // // // // // // import RBush from "rbush";
+// // // // // // // // // // // // // // import styles from "./map.module.css";
+// // // // // // // // // // // // // // import { GeoJSON as GeoJSONType } from "geojson";
+
+// // // // // // // // // // // // // // interface FeatureProperties {
+// // // // // // // // // // // // // //   pm25_value: number;
+// // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // interface BoundaryProperties {
+// // // // // // // // // // // // // //   NAMOBJ: string;
+// // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // interface Feature {
+// // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // //   id: number;
+// // // // // // // // // // // // // //   properties: FeatureProperties;
+// // // // // // // // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
+// // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // interface BoundaryFeature {
+// // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // //   properties: BoundaryProperties;
+// // // // // // // // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
+// // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // interface GeoJSONData {
+// // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // //   features: Feature[];
+// // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // interface BoundaryGeoJSONData {
+// // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // //   features: BoundaryFeature[];
+// // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // interface HeatMapLayerProps {
+// // // // // // // // // // // // // //   geoData: GeoJSONData | null;
+// // // // // // // // // // // // // //   boundaryData: BoundaryGeoJSONData | null;
+// // // // // // // // // // // // // //   selectedDate: string;
+// // // // // // // // // // // // // //   isLoading: boolean;
+// // // // // // // // // // // // // //   inputRef: React.RefObject<HTMLInputElement>;
+// // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // interface RBushItem {
+// // // // // // // // // // // // // //   minX: number;
+// // // // // // // // // // // // // //   minY: number;
+// // // // // // // // // // // // // //   maxX: number;
+// // // // // // // // // // // // // //   maxY: number;
+// // // // // // // // // // // // // //   featureIndex: number;
+// // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // interface InterpolatedFeature {
+// // // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // // //   geometry: turf.Point;
+// // // // // // // // // // // // // //   properties: { pm25: number };
+// // // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // // const interpolateColor = (value: number): string => {
+// // // // // // // // // // // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
+// // // // // // // // // // // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
+// // // // // // // // // // // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
+// // // // // // // // // // // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
+// // // // // // // // // // // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // // // // // // // // // // // };
+
+// // // // // // // // // // // // // // const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
+// // // // // // // // // // // // // //   const map = useMap();
+// // // // // // // // // // // // // //   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
+// // // // // // // // // // // // // //   const tooltipRef = useRef<L.Tooltip | null>(null);
+// // // // // // // // // // // // // //   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+// // // // // // // // // // // // // //   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
+// // // // // // // // // // // // // //   const interpolatedDataRef = useRef<InterpolatedFeature[]>([]);
+// // // // // // // // // // // // // //   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
+
+// // // // // // // // // // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
+// // // // // // // // // // // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
+// // // // // // // // // // // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
+// // // // // // // // // // // // // //     const textColor = pm25Color === "#00ff00" || pm25Color === "#ffff00" ? "#000000" : "#ffffff";
+// // // // // // // // // // // // // //     return `
+// // // // // // // // // // // // // //       <div class="${styles.customTooltip}">
+// // // // // // // // // // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
+// // // // // // // // // // // // // //         <div class="${styles.aodContainer}">
+// // // // // // // // // // // // // //           <div class="${styles.aodCircle}" style="background-color: ${pm25Color}; color: ${textColor}">
+// // // // // // // // // // // // // //             ${formattedPM25Value}
+// // // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // // //       </div>
+// // // // // // // // // // // // // //     `;
+// // // // // // // // // // // // // //   };
+
+// // // // // // // // // // // // // //   const cachedBoundaries = useMemo(() => {
+// // // // // // // // // // // // // //     if (!geoData) return turf.featureCollection([]);
+// // // // // // // // // // // // // //     return turf.featureCollection(
+// // // // // // // // // // // // // //       geoData.features
+// // // // // // // // // // // // // //         .filter((f) => f.properties.pm25_value != null && f.properties.pm25_value >= 0)
+// // // // // // // // // // // // // //         .map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" }))
+// // // // // // // // // // // // // //     );
+// // // // // // // // // // // // // //   }, [geoData]);
+
+// // // // // // // // // // // // // //   useEffect(() => {
+// // // // // // // // // // // // // //     if (!boundaryData) return;
+// // // // // // // // // // // // // //     const spatialIndex = new RBush<RBushItem>();
+// // // // // // // // // // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // // // // // // // // // // //       const bbox = turf.bbox(feature.geometry);
+// // // // // // // // // // // // // //       spatialIndex.insert({
+// // // // // // // // // // // // // //         minX: bbox[0],
+// // // // // // // // // // // // // //         minY: bbox[1],
+// // // // // // // // // // // // // //         maxX: bbox[2],
+// // // // // // // // // // // // // //         maxY: bbox[3],
+// // // // // // // // // // // // // //         featureIndex: index,
+// // // // // // // // // // // // // //       });
+// // // // // // // // // // // // // //     });
+// // // // // // // // // // // // // //     spatialIndexRef.current = spatialIndex;
+
+// // // // // // // // // // // // // //     return () => {
+// // // // // // // // // // // // // //       spatialIndexRef.current = null;
+// // // // // // // // // // // // // //     };
+// // // // // // // // // // // // // //   }, [boundaryData]);
+
+// // // // // // // // // // // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // // // // // // // // // // // //     const points = geoData.features
+// // // // // // // // // // // // // //       .map((feature) => {
+// // // // // // // // // // // // // //         const centroid = turf.centroid(feature.geometry);
+// // // // // // // // // // // // // //         const pm25 = feature.properties.pm25_value;
+// // // // // // // // // // // // // //         if (pm25 == null || pm25 < 0 || isNaN(pm25)) return null;
+// // // // // // // // // // // // // //         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
+// // // // // // // // // // // // // //       })
+// // // // // // // // // // // // // //       .filter((p): p is [number, number, number] => p !== null);
+
+// // // // // // // // // // // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // // // // // // // // // // //     const cellSize = 0.02;
+// // // // // // // // // // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
+
+// // // // // // // // // // // // // //     let interpolated = turf.featureCollection([]);
+// // // // // // // // // // // // // //     if (points.length > 0) {
+// // // // // // // // // // // // // //       try {
+// // // // // // // // // // // // // //         interpolated = turf.interpolate(
+// // // // // // // // // // // // // //           turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { pm25: p[2] }))),
+// // // // // // // // // // // // // //           cellSize / 4,
+// // // // // // // // // // // // // //           { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 }
+// // // // // // // // // // // // // //         );
+// // // // // // // // // // // // // //       } catch (error) {
+// // // // // // // // // // // // // //         console.error("Interpolation error:", error);
+// // // // // // // // // // // // // //         return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // // // //       }
+// // // // // // // // // // // // // //     }
+// // // // // // // // // // // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
+
+// // // // // // // // // // // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // // // // // // // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
+
+// // // // // // // // // // // // // //     const canvas = document.createElement("canvas");
+// // // // // // // // // // // // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
+// // // // // // // // // // // // // //     const height = Math.ceil((bbox[3] - bbox[1]) / cellSize);
+// // // // // // // // // // // // // //     canvas.width = width;
+// // // // // // // // // // // // // //     canvas.height = height;
+// // // // // // // // // // // // // //     const ctx = canvas.getContext("2d");
+
+// // // // // // // // // // // // // //     if (!ctx) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+
+// // // // // // // // // // // // // //     ctx.fillStyle = "rgba(0, 0, 0, 0)";
+// // // // // // // // // // // // // //     ctx.fillRect(0, 0, width, height);
+
+// // // // // // // // // // // // // //     clipped.features.forEach((feature) => {
+// // // // // // // // // // // // // //       const coords = feature.geometry.coordinates;
+// // // // // // // // // // // // // //       const point = turf.point(coords);
+
+// // // // // // // // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+
+// // // // // // // // // // // // // //       let pm25Value: number | null = null;
+// // // // // // // // // // // // // //       if (inBuffer && interpolated.features.length > 0) {
+// // // // // // // // // // // // // //         const closest = interpolated.features.reduce(
+// // // // // // // // // // // // // //           (acc, f) => {
+// // // // // // // // // // // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // // // // // // // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
+// // // // // // // // // // // // // //           },
+// // // // // // // // // // // // // //           { dist: Infinity, value: 0 }
+// // // // // // // // // // // // // //         );
+// // // // // // // // // // // // // //         pm25Value = closest.value;
+// // // // // // // // // // // // // //       } else {
+// // // // // // // // // // // // // //         const pm25Feature = geoData.features.find((f) => {
+// // // // // // // // // // // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
+// // // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // // //         });
+// // // // // // // // // // // // // //         pm25Value =
+// // // // // // // // // // // // // //           pm25Feature && pm25Feature.properties.pm25_value != null && pm25Feature.properties.pm25_value >= 0
+// // // // // // // // // // // // // //             ? pm25Feature.properties.pm25_value
+// // // // // // // // // // // // // //             : null;
+// // // // // // // // // // // // // //       }
+
+// // // // // // // // // // // // // //       if (pm25Value == null) return;
+
+// // // // // // // // // // // // // //       const color = interpolateColor(pm25Value);
+// // // // // // // // // // // // // //       const x = Math.round((coords[0] - bbox[0]) / cellSize);
+// // // // // // // // // // // // // //       const y = Math.round((bbox[3] - coords[1]) / cellSize);
+// // // // // // // // // // // // // //       ctx.fillStyle = color;
+// // // // // // // // // // // // // //       ctx.fillRect(x, y, 1, 1);
+// // // // // // // // // // // // // //     });
+
+// // // // // // // // // // // // // //     return { imageUrl: canvas.toDataURL(), bbox };
+// // // // // // // // // // // // // //   };
+
+// // // // // // // // // // // // // //   const cachedGrid = useMemo(() => {
+// // // // // // // // // // // // // //     if (!geoData || !boundaryData) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // // // //     return generateStaticGrid(geoData, boundaryData);
+// // // // // // // // // // // // // //   }, [geoData, boundaryData]);
+
+// // // // // // // // // // // // // //   useEffect(() => {
+// // // // // // // // // // // // // //     if (!map || !geoData || !boundaryData) {
+// // // // // // // // // // // // // //       return;
+// // // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // // //     const { imageUrl, bbox } = cachedGrid;
+
+// // // // // // // // // // // // // //     if (staticLayerRef.current) {
+// // // // // // // // // // // // // //       map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // // // // //       staticLayerRef.current = null;
+// // // // // // // // // // // // // //     }
+// // // // // // // // // // // // // //     if (tooltipRef.current) {
+// // // // // // // // // // // // // //       tooltipRef.current.remove();
+// // // // // // // // // // // // // //       tooltipRef.current = null;
+// // // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // // //     if (imageUrl) {
+// // // // // // // // // // // // // //       const bounds = [
+// // // // // // // // // // // // // //         [bbox[1], bbox[0]],
+// // // // // // // // // // // // // //         [bbox[3], bbox[2]],
+// // // // // // // // // // // // // //       ];
+// // // // // // // // // // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
+// // // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
+// // // // // // // // // // // // // //       if (document.activeElement === inputRef.current) {
+// // // // // // // // // // // // // //         return;
+// // // // // // // // // // // // // //       }
+// // // // // // // // // // // // // //       const { lat, lng } = e.latlng;
+// // // // // // // // // // // // // //       if (lastPosition.current && Math.abs(lastPosition.current.lat - lat) < 0.0001 && Math.abs(lastPosition.current.lng - lng) < 0.0001) {
+// // // // // // // // // // // // // //         return;
+// // // // // // // // // // // // // //       }
+// // // // // // // // // // // // // //       lastPosition.current = { lat, lng };
+
+// // // // // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+// // // // // // // // // // // // // //       timeoutRef.current = setTimeout(() => {
+// // // // // // // // // // // // // //         if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // // // // //         const point = turf.point([lng, lat]);
+
+// // // // // // // // // // // // // //         const candidates = spatialIndexRef.current?.search({
+// // // // // // // // // // // // // //           minX: lng,
+// // // // // // // // // // // // // //           minY: lat,
+// // // // // // // // // // // // // //           maxX: lng,
+// // // // // // // // // // // // // //           maxY: lat,
+// // // // // // // // // // // // // //         }) || [];
+
+// // // // // // // // // // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
+// // // // // // // // // // // // // //           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
+// // // // // // // // // // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
+// // // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // // //         });
+
+// // // // // // // // // // // // // //         const pm25Feature = geoData.features.find((feature) => {
+// // // // // // // // // // // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(feature.geometry.coordinates);
+// // // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // // //         });
+// // // // // // // // // // // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+
+// // // // // // // // // // // // // //         if (kelurahan?.properties) {
+// // // // // // // // // // // // // //           tooltipRef.current = L.tooltip({
+// // // // // // // // // // // // // //             sticky: true,
+// // // // // // // // // // // // // //             direction: "top",
+// // // // // // // // // // // // // //             offset: [0, -20],
+// // // // // // // // // // // // // //             className: styles.customTooltip,
+// // // // // // // // // // // // // //           })
+// // // // // // // // // // // // // //             .setLatLng(e.latlng)
+// // // // // // // // // // // // // //             .setContent(getTooltipContent(pm25Value, kelurahan.properties.NAMOBJ))
+// // // // // // // // // // // // // //             .addTo(map);
+// // // // // // // // // // // // // //         }
+// // // // // // // // // // // // // //       }, 500);
+// // // // // // // // // // // // // //     };
+
+// // // // // // // // // // // // // //     map.on("mousemove", handleMouseMove);
+
+// // // // // // // // // // // // // //     return () => {
+// // // // // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+// // // // // // // // // // // // // //       map.off("mousemove", handleMouseMove);
+// // // // // // // // // // // // // //       if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // // // // //       if (staticLayerRef.current) map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // // // // //     };
+// // // // // // // // // // // // // //   }, [map, cachedGrid, selectedDate, inputRef, geoData, boundaryData]);
+
+// // // // // // // // // // // // // //   return (
+// // // // // // // // // // // // // //     <>
+// // // // // // // // // // // // // //       {isLoading && (
+// // // // // // // // // // // // // //         <div className={styles.loadingOverlay}>
+// // // // // // // // // // // // // //           <div className={styles.spinner}></div>
+// // // // // // // // // // // // // //           <span>Memuat Heatmap...</span>
+// // // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // // //       )}
+// // // // // // // // // // // // // //       <div className={styles.legend}>
+// // // // // // // // // // // // // //         <h4>Indikator PM2.5 (µg/m³)</h4>
+// // // // // // // // // // // // // //         <div className={styles.gradientLegend}>
+// // // // // // // // // // // // // //           <div
+// // // // // // // // // // // // // //             className={styles.gradientBar}
+// // // // // // // // // // // // // //             style={{
+// // // // // // // // // // // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // // // // // // // // // // //             }}
+// // // // // // // // // // // // // //           ></div>
+// // // // // // // // // // // // // //           <div className={styles.gradientLabels}>
+// // // // // // // // // // // // // //             <span>0</span>
+// // // // // // // // // // // // // //             <span>300+</span>
+// // // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // // //           <div className={styles.legendLabels}>
+// // // // // // // // // // // // // //             <span>Baik (0 - 50)</span>
+// // // // // // // // // // // // // //             <span>Sedang (51 - 100)</span>
+// // // // // // // // // // // // // //             <span>Tidak Sehat (101 - 199)</span>
+// // // // // // // // // // // // // //             <span>Sangat Tidak Sehat (200 - 299)</span>
+// // // // // // // // // // // // // //             <span>Berbahaya (&gt; 300)</span>
+// // // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // // //       </div>
+// // // // // // // // // // // // // //     </>
+// // // // // // // // // // // // // //   );
+// // // // // // // // // // // // // // };
+
+// // // // // // // // // // // // // // export default HeatMapLayer;
+
+// // // // // // // // // // // // // "use client";
+
+// // // // // // // // // // // // // import { useEffect, useRef, useMemo } from "react";
+// // // // // // // // // // // // // import { useMap } from "react-leaflet";
+// // // // // // // // // // // // // import L from "leaflet";
+// // // // // // // // // // // // // import * as turf from "@turf/turf";
+// // // // // // // // // // // // // import * as GeoJSON from "geojson";
+// // // // // // // // // // // // // import RBush from "rbush";
+// // // // // // // // // // // // // import styles from "./map.module.css";
+
+// // // // // // // // // // // // // interface FeatureProperties {
+// // // // // // // // // // // // //   pm25_value: number;
+// // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // interface BoundaryProperties {
+// // // // // // // // // // // // //   NAMOBJ: string;
+// // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // interface Feature {
+// // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // //   id: number;
+// // // // // // // // // // // // //   properties: FeatureProperties;
+// // // // // // // // // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+// // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // interface BoundaryFeature {
+// // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // //   properties: BoundaryProperties;
+// // // // // // // // // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+// // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // interface GeoJSONData {
+// // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // //   features: Feature[];
+// // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // interface BoundaryGeoJSONData {
+// // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // //   features: BoundaryFeature[];
+// // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // interface HeatMapLayerProps {
+// // // // // // // // // // // // //   geoData: GeoJSONData | null;
+// // // // // // // // // // // // //   boundaryData: BoundaryGeoJSONData | null;
+// // // // // // // // // // // // //   selectedDate: string;
+// // // // // // // // // // // // //   isLoading: boolean;
+// // // // // // // // // // // // //   inputRef: React.RefObject<HTMLInputElement>;
+// // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // interface RBushItem {
+// // // // // // // // // // // // //   minX: number;
+// // // // // // // // // // // // //   minY: number;
+// // // // // // // // // // // // //   maxX: number;
+// // // // // // // // // // // // //   maxY: number;
+// // // // // // // // // // // // //   featureIndex: number;
+// // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // interface InterpolatedFeature {
+// // // // // // // // // // // // //   type: string;
+// // // // // // // // // // // // //   geometry: turf.Point;
+// // // // // // // // // // // // //   properties: { pm25: number };
+// // // // // // // // // // // // // }
+
+// // // // // // // // // // // // // const interpolateColor = (value: number): string => {
+// // // // // // // // // // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
+// // // // // // // // // // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
+// // // // // // // // // // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
+// // // // // // // // // // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
+// // // // // // // // // // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // // // // // // // // // // };
+
+// // // // // // // // // // // // // const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
+// // // // // // // // // // // // //   const map = useMap();
+// // // // // // // // // // // // //   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
+// // // // // // // // // // // // //   const tooltipRef = useRef<L.Tooltip | null>(null);
+// // // // // // // // // // // // //   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+// // // // // // // // // // // // //   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
+// // // // // // // // // // // // //   const interpolatedDataRef = useRef<InterpolatedFeature[]>([]);
+// // // // // // // // // // // // //   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
+
+// // // // // // // // // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
+// // // // // // // // // // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
+// // // // // // // // // // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
+// // // // // // // // // // // // //     const textColor = pm25Color === "#00ff00" || pm25Color === "#ffff00" ? "#000000" : "#ffffff";
+// // // // // // // // // // // // //     return `
+// // // // // // // // // // // // //       <div class="${styles.customTooltip}">
+// // // // // // // // // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
+// // // // // // // // // // // // //         <div class="${styles.aodContainer}">
+// // // // // // // // // // // // //           <div class="${styles.aodCircle}" style="background-color: ${pm25Color}; color: ${textColor}">
+// // // // // // // // // // // // //             ${formattedPM25Value}
+// // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // //       </div>
+// // // // // // // // // // // // //     `;
+// // // // // // // // // // // // //   };
+
+// // // // // // // // // // // // //   const cachedBoundaries = useMemo(() => {
+// // // // // // // // // // // // //     if (!geoData) return turf.featureCollection([]);
+// // // // // // // // // // // // //     return turf.featureCollection(
+// // // // // // // // // // // // //       geoData.features
+// // // // // // // // // // // // //         .filter((f) => f.properties.pm25_value != null && f.properties.pm25_value >= 0)
+// // // // // // // // // // // // //         .map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" }))
+// // // // // // // // // // // // //     );
+// // // // // // // // // // // // //   }, [geoData]);
+
+// // // // // // // // // // // // //   useEffect(() => {
+// // // // // // // // // // // // //     if (!boundaryData) return;
+// // // // // // // // // // // // //     const spatialIndex = new RBush<RBushItem>();
+// // // // // // // // // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // // // // // // // // // //       const bbox = turf.bbox(feature.geometry);
+// // // // // // // // // // // // //       spatialIndex.insert({
+// // // // // // // // // // // // //         minX: bbox[0],
+// // // // // // // // // // // // //         minY: bbox[1],
+// // // // // // // // // // // // //         maxX: bbox[2],
+// // // // // // // // // // // // //         maxY: bbox[3],
+// // // // // // // // // // // // //         featureIndex: index,
+// // // // // // // // // // // // //       });
+// // // // // // // // // // // // //     });
+// // // // // // // // // // // // //     spatialIndexRef.current = spatialIndex;
+
+// // // // // // // // // // // // //     return () => {
+// // // // // // // // // // // // //       spatialIndexRef.current = null;
+// // // // // // // // // // // // //     };
+// // // // // // // // // // // // //   }, [boundaryData]);
+
+// // // // // // // // // // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // // // // // // // // // // //     const points = geoData.features
+// // // // // // // // // // // // //       .map((feature) => {
+// // // // // // // // // // // // //         const centroid = turf.centroid(feature.geometry);
+// // // // // // // // // // // // //         const pm25 = feature.properties.pm25_value;
+// // // // // // // // // // // // //         if (pm25 == null || pm25 < 0 || isNaN(pm25)) return null;
+// // // // // // // // // // // // //         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
+// // // // // // // // // // // // //       })
+// // // // // // // // // // // // //       .filter((p): p is [number, number, number] => p !== null);
+
+// // // // // // // // // // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // // // // // // // // // //     const cellSize = 0.02;
+// // // // // // // // // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
+
+// // // // // // // // // // // // //     let interpolated = turf.featureCollection([]);
+// // // // // // // // // // // // //     if (points.length > 0) {
+// // // // // // // // // // // // //       try {
+// // // // // // // // // // // // //         interpolated = turf.interpolate(
+// // // // // // // // // // // // //           turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { pm25: p[2] }))),
+// // // // // // // // // // // // //           cellSize / 4,
+// // // // // // // // // // // // //           { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 }
+// // // // // // // // // // // // //         );
+// // // // // // // // // // // // //       } catch (error) {
+// // // // // // // // // // // // //         console.error("Interpolation error:", error);
+// // // // // // // // // // // // //         return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // // //       }
+// // // // // // // // // // // // //     }
+// // // // // // // // // // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
+
+// // // // // // // // // // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // // // // // // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
+
+// // // // // // // // // // // // //     const canvas = document.createElement("canvas");
+// // // // // // // // // // // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
+// // // // // // // // // // // // //     const height = Math.ceil((bbox[3] - bbox[1]) / cellSize);
+// // // // // // // // // // // // //     canvas.width = width;
+// // // // // // // // // // // // //     canvas.height = height;
+// // // // // // // // // // // // //     const ctx = canvas.getContext("2d");
+
+// // // // // // // // // // // // //     if (!ctx) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+
+// // // // // // // // // // // // //     ctx.fillStyle = "rgba(0, 0, 0, 0)";
+// // // // // // // // // // // // //     ctx.fillRect(0, 0, width, height);
+
+// // // // // // // // // // // // //     clipped.features.forEach((feature) => {
+// // // // // // // // // // // // //       const coords = feature.geometry.coordinates;
+// // // // // // // // // // // // //       const point = turf.point(coords);
+
+// // // // // // // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+
+// // // // // // // // // // // // //       let pm25Value: number | null = null;
+// // // // // // // // // // // // //       if (inBuffer && interpolated.features.length > 0) {
+// // // // // // // // // // // // //         const closest = interpolated.features.reduce(
+// // // // // // // // // // // // //           (acc, f) => {
+// // // // // // // // // // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // // // // // // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
+// // // // // // // // // // // // //           },
+// // // // // // // // // // // // //           { dist: Infinity, value: 0 }
+// // // // // // // // // // // // //         );
+// // // // // // // // // // // // //         pm25Value = closest.value;
+// // // // // // // // // // // // //       } else {
+// // // // // // // // // // // // //         const pm25Feature = geoData.features.find((f) => {
+// // // // // // // // // // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
+// // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // //         });
+// // // // // // // // // // // // //         pm25Value =
+// // // // // // // // // // // // //           pm25Feature && pm25Feature.properties.pm25_value != null && pm25Feature.properties.pm25_value >= 0
+// // // // // // // // // // // // //             ? pm25Feature.properties.pm25_value
+// // // // // // // // // // // // //             : null;
+// // // // // // // // // // // // //       }
+
+// // // // // // // // // // // // //       if (pm25Value == null) return;
+
+// // // // // // // // // // // // //       const color = interpolateColor(pm25Value);
+// // // // // // // // // // // // //       const x = Math.round((coords[0] - bbox[0]) / cellSize);
+// // // // // // // // // // // // //       const y = Math.round((bbox[3] - coords[1]) / cellSize);
+// // // // // // // // // // // // //       ctx.fillStyle = color;
+// // // // // // // // // // // // //       ctx.fillRect(x, y, 1, 1);
+// // // // // // // // // // // // //     });
+
+// // // // // // // // // // // // //     return { imageUrl: canvas.toDataURL(), bbox };
+// // // // // // // // // // // // //   };
+
+// // // // // // // // // // // // //   const cachedGrid = useMemo(() => {
+// // // // // // // // // // // // //     if (!geoData || !boundaryData) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // // //     return generateStaticGrid(geoData, boundaryData);
+// // // // // // // // // // // // //   }, [geoData, boundaryData]);
+
+// // // // // // // // // // // // //   useEffect(() => {
+// // // // // // // // // // // // //     if (!map || !geoData || !boundaryData) {
+// // // // // // // // // // // // //       return;
+// // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // //     const { imageUrl, bbox } = cachedGrid;
+
+// // // // // // // // // // // // //     if (staticLayerRef.current) {
+// // // // // // // // // // // // //       map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // // // //       staticLayerRef.current = null;
+// // // // // // // // // // // // //     }
+// // // // // // // // // // // // //     if (tooltipRef.current) {
+// // // // // // // // // // // // //       tooltipRef.current.remove();
+// // // // // // // // // // // // //       tooltipRef.current = null;
+// // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // //     if (imageUrl) {
+// // // // // // // // // // // // //       const bounds = [
+// // // // // // // // // // // // //         [bbox[1], bbox[0]],
+// // // // // // // // // // // // //         [bbox[3], bbox[2]],
+// // // // // // // // // // // // //       ];
+// // // // // // // // // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
+// // // // // // // // // // // // //     }
+
+// // // // // // // // // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
+// // // // // // // // // // // // //       if (document.activeElement === inputRef.current) {
+// // // // // // // // // // // // //         return;
+// // // // // // // // // // // // //       }
+// // // // // // // // // // // // //       const { lat, lng } = e.latlng;
+// // // // // // // // // // // // //       if (lastPosition.current && Math.abs(lastPosition.current.lat - lat) < 0.0001 && Math.abs(lastPosition.current.lng - lng) < 0.0001) {
+// // // // // // // // // // // // //         return;
+// // // // // // // // // // // // //       }
+// // // // // // // // // // // // //       lastPosition.current = { lat, lng };
+
+// // // // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+// // // // // // // // // // // // //       timeoutRef.current = setTimeout(() => {
+// // // // // // // // // // // // //         if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // // // //         const point = turf.point([lng, lat]);
+
+// // // // // // // // // // // // //         const candidates = spatialIndexRef.current?.search({
+// // // // // // // // // // // // //           minX: lng,
+// // // // // // // // // // // // //           minY: lat,
+// // // // // // // // // // // // //           maxX: lng,
+// // // // // // // // // // // // //           maxY: lat,
+// // // // // // // // // // // // //         }) || [];
+
+// // // // // // // // // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
+// // // // // // // // // // // // //           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
+// // // // // // // // // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
+// // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // //         });
+
+// // // // // // // // // // // // //         const pm25Feature = geoData.features.find((feature) => {
+// // // // // // // // // // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(feature.geometry.coordinates);
+// // // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // // //         });
+// // // // // // // // // // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+
+// // // // // // // // // // // // //         if (kelurahan?.properties) {
+// // // // // // // // // // // // //           tooltipRef.current = L.tooltip({
+// // // // // // // // // // // // //             sticky: true,
+// // // // // // // // // // // // //             direction: "top",
+// // // // // // // // // // // // //             offset: [0, -20],
+// // // // // // // // // // // // //             className: styles.customTooltip,
+// // // // // // // // // // // // //           })
+// // // // // // // // // // // // //             .setLatLng(e.latlng)
+// // // // // // // // // // // // //             .setContent(getTooltipContent(pm25Value, kelurahan.properties.NAMOBJ))
+// // // // // // // // // // // // //             .addTo(map);
+// // // // // // // // // // // // //         }
+// // // // // // // // // // // // //       }, 500);
+// // // // // // // // // // // // //     };
+
+// // // // // // // // // // // // //     map.on("mousemove", handleMouseMove);
+
+// // // // // // // // // // // // //     return () => {
+// // // // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+// // // // // // // // // // // // //       map.off("mousemove", handleMouseMove);
+// // // // // // // // // // // // //       if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // // // //       if (staticLayerRef.current) map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // // // //     };
+// // // // // // // // // // // // //   }, [map, cachedGrid, selectedDate, inputRef, geoData, boundaryData]);
+
+// // // // // // // // // // // // //   return (
+// // // // // // // // // // // // //     <>
+// // // // // // // // // // // // //       {isLoading && (
+// // // // // // // // // // // // //         <div className={styles.loadingOverlay}>
+// // // // // // // // // // // // //           <div className={styles.spinner}></div>
+// // // // // // // // // // // // //           <span>Memuat Heatmap...</span>
+// // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // //       )}
+// // // // // // // // // // // // //       <div className={styles.legend}>
+// // // // // // // // // // // // //         <h4>Indikator PM2.5 (µg/m³)</h4>
+// // // // // // // // // // // // //         <div className={styles.gradientLegend}>
+// // // // // // // // // // // // //           <div
+// // // // // // // // // // // // //             className={styles.gradientBar}
+// // // // // // // // // // // // //             style={{
+// // // // // // // // // // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // // // // // // // // // //             }}
+// // // // // // // // // // // // //           ></div>
+// // // // // // // // // // // // //           <div className={styles.gradientLabels}>
+// // // // // // // // // // // // //             <span>0</span>
+// // // // // // // // // // // // //             <span>300+</span>
+// // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // //           <div className={styles.legendLabels}>
+// // // // // // // // // // // // //             <span>Baik (0 - 50)</span>
+// // // // // // // // // // // // //             <span>Sedang (51 - 100)</span>
+// // // // // // // // // // // // //             <span>Tidak Sehat (101 - 199)</span>
+// // // // // // // // // // // // //             <span>Sangat Tidak Sehat (200 - 299)</span>
+// // // // // // // // // // // // //             <span>Berbahaya (&gt; 300)</span>
+// // // // // // // // // // // // //           </div>
+// // // // // // // // // // // // //         </div>
+// // // // // // // // // // // // //       </div>
+// // // // // // // // // // // // //     </>
+// // // // // // // // // // // // //   );
+// // // // // // // // // // // // // };
+
+// // // // // // // // // // // // // export default HeatMapLayer;
+
+// // // // // // // // // // // // "use client";
+
+// // // // // // // // // // // // import { useEffect, useRef, useMemo } from "react";
+// // // // // // // // // // // // import { useMap } from "react-leaflet";
+// // // // // // // // // // // // import L from "leaflet";
+// // // // // // // // // // // // import * as turf from "@turf/turf";
+// // // // // // // // // // // // import * as GeoJSON from "geojson";
+// // // // // // // // // // // // import RBush from "rbush";
+// // // // // // // // // // // // import styles from "./map.module.css";
+
+// // // // // // // // // // // // interface FeatureProperties {
+// // // // // // // // // // // //   pm25_value: number;
+// // // // // // // // // // // // }
+
+// // // // // // // // // // // // interface BoundaryProperties {
+// // // // // // // // // // // //   NAMOBJ: string;
+// // // // // // // // // // // // }
+
+// // // // // // // // // // // // interface Feature {
+// // // // // // // // // // // //   type: string;
+// // // // // // // // // // // //   id: number;
+// // // // // // // // // // // //   properties: FeatureProperties;
+// // // // // // // // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+// // // // // // // // // // // // }
+
+// // // // // // // // // // // // interface BoundaryFeature {
+// // // // // // // // // // // //   type: string;
+// // // // // // // // // // // //   properties: BoundaryProperties;
+// // // // // // // // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+// // // // // // // // // // // // }
+
+// // // // // // // // // // // // interface GeoJSONData {
+// // // // // // // // // // // //   type: string;
+// // // // // // // // // // // //   features: Feature[];
+// // // // // // // // // // // // }
+
+// // // // // // // // // // // // interface BoundaryGeoJSONData {
+// // // // // // // // // // // //   type: string;
+// // // // // // // // // // // //   features: BoundaryFeature[];
+// // // // // // // // // // // // }
+
+// // // // // // // // // // // // interface HeatMapLayerProps {
+// // // // // // // // // // // //   geoData: GeoJSONData | null;
+// // // // // // // // // // // //   boundaryData: BoundaryGeoJSONData | null;
+// // // // // // // // // // // //   selectedDate: string;
+// // // // // // // // // // // //   isLoading: boolean;
+// // // // // // // // // // // //   inputRef: React.RefObject<HTMLInputElement>;
+// // // // // // // // // // // // }
+
+// // // // // // // // // // // // interface RBushItem {
+// // // // // // // // // // // //   minX: number;
+// // // // // // // // // // // //   minY: number;
+// // // // // // // // // // // //   maxX: number;
+// // // // // // // // // // // //   maxY: number;
+// // // // // // // // // // // //   featureIndex: number;
+// // // // // // // // // // // // }
+
+// // // // // // // // // // // // interface InterpolatedFeature {
+// // // // // // // // // // // //   type: string;
+// // // // // // // // // // // //   geometry: GeoJSON.Point;
+// // // // // // // // // // // //   properties: { pm25: number };
+// // // // // // // // // // // // }
+
+// // // // // // // // // // // // const interpolateColor = (value: number): string => {
+// // // // // // // // // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
+// // // // // // // // // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
+// // // // // // // // // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
+// // // // // // // // // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
+// // // // // // // // // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // // // // // // // // // };
+
+// // // // // // // // // // // // const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
+// // // // // // // // // // // //   const map = useMap();
+// // // // // // // // // // // //   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
+// // // // // // // // // // // //   const tooltipRef = useRef<L.Tooltip | null>(null);
+// // // // // // // // // // // //   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+// // // // // // // // // // // //   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
+// // // // // // // // // // // //   const interpolatedDataRef = useRef<InterpolatedFeature[]>([]);
+// // // // // // // // // // // //   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
+
+// // // // // // // // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
+// // // // // // // // // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
+// // // // // // // // // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
+// // // // // // // // // // // //     const textColor = pm25Color === "#00ff00" || pm25Color === "#ffff00" ? "#000000" : "#ffffff";
+// // // // // // // // // // // //     return `
+// // // // // // // // // // // //       <div class="${styles.customTooltip}">
+// // // // // // // // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
+// // // // // // // // // // // //         <div class="${styles.aodContainer}">
+// // // // // // // // // // // //           <div class="${styles.aodCircle}" style="background-color: ${pm25Color}; color: ${textColor}">
+// // // // // // // // // // // //             ${formattedPM25Value}
+// // // // // // // // // // // //           </div>
+// // // // // // // // // // // //         </div>
+// // // // // // // // // // // //       </div>
+// // // // // // // // // // // //     `;
+// // // // // // // // // // // //   };
+
+// // // // // // // // // // // //   const cachedBoundaries = useMemo(() => {
+// // // // // // // // // // // //     if (!geoData) return turf.featureCollection([]);
+// // // // // // // // // // // //     return turf.featureCollection(
+// // // // // // // // // // // //       geoData.features
+// // // // // // // // // // // //         .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
+// // // // // // // // // // // //         .map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" }))
+// // // // // // // // // // // //     );
+// // // // // // // // // // // //   }, [geoData]);
+
+// // // // // // // // // // // //   useEffect(() => {
+// // // // // // // // // // // //     if (!boundaryData) return;
+// // // // // // // // // // // //     const spatialIndex = new RBush<RBushItem>();
+// // // // // // // // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // // // // // // // // //       const bbox = turf.bbox(feature.geometry);
+// // // // // // // // // // // //       spatialIndex.insert({
+// // // // // // // // // // // //         minX: bbox[0],
+// // // // // // // // // // // //         minY: bbox[1],
+// // // // // // // // // // // //         maxX: bbox[2],
+// // // // // // // // // // // //         maxY: bbox[3],
+// // // // // // // // // // // //         featureIndex: index,
+// // // // // // // // // // // //       });
+// // // // // // // // // // // //     });
+// // // // // // // // // // // //     spatialIndexRef.current = spatialIndex;
+
+// // // // // // // // // // // //     return () => {
+// // // // // // // // // // // //       spatialIndexRef.current = null;
+// // // // // // // // // // // //     };
+// // // // // // // // // // // //   }, [boundaryData]);
+
+// // // // // // // // // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // // // // // // // // // //     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
+
+// // // // // // // // // // // //     const points = geoData.features
+// // // // // // // // // // // //       .map((feature) => {
+// // // // // // // // // // // //         const centroid = turf.centroid(feature.geometry);
+// // // // // // // // // // // //         const pm25 = feature.properties.pm25_value;
+// // // // // // // // // // // //         if (pm25 == null || isNaN(pm25)) {
+// // // // // // // // // // // //           console.log("Skipping feature due to invalid pm25_value:", feature);
+// // // // // // // // // // // //           return null;
+// // // // // // // // // // // //         }
+// // // // // // // // // // // //         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
+// // // // // // // // // // // //       })
+// // // // // // // // // // // //       .filter((p): p is [number, number, number] => p !== null);
+
+// // // // // // // // // // // //     console.log("generateStaticGrid: Valid points for interpolation:", points.length, points);
+
+// // // // // // // // // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // // // // // // // // //     console.log("generateStaticGrid: Bounding box:", bbox);
+
+// // // // // // // // // // // //     const cellSize = 0.02;
+// // // // // // // // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
+// // // // // // // // // // // //     console.log("generateStaticGrid: Grid points created:", grid.features.length);
+
+// // // // // // // // // // // //     let interpolated = turf.featureCollection([]);
+// // // // // // // // // // // //     if (points.length > 0) {
+// // // // // // // // // // // //       try {
+// // // // // // // // // // // //         interpolated = turf.interpolate(
+// // // // // // // // // // // //           turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { pm25: p[2] }))),
+// // // // // // // // // // // //           cellSize / 4,
+// // // // // // // // // // // //           { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 }
+// // // // // // // // // // // //         );
+// // // // // // // // // // // //         console.log("generateStaticGrid: Interpolated points:", interpolated.features.length);
+// // // // // // // // // // // //       } catch (error) {
+// // // // // // // // // // // //         console.error("Interpolation error:", error);
+// // // // // // // // // // // //         return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // //       }
+// // // // // // // // // // // //     } else {
+// // // // // // // // // // // //       console.warn("generateStaticGrid: No valid points for interpolation");
+// // // // // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // //     }
+// // // // // // // // // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
+
+// // // // // // // // // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // // // // // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
+// // // // // // // // // // // //     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
+
+// // // // // // // // // // // //     const canvas = document.createElement("canvas");
+// // // // // // // // // // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
+// // // // // // // // // // // //     const height = Math.ceil((bbox[3] - bbox[1]) / cellSize);
+// // // // // // // // // // // //     canvas.width = width;
+// // // // // // // // // // // //     canvas.height = height;
+// // // // // // // // // // // //     const ctx = canvas.getContext("2d");
+
+// // // // // // // // // // // //     if (!ctx) {
+// // // // // // // // // // // //       console.error("generateStaticGrid: Failed to get canvas context");
+// // // // // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // //     }
+
+// // // // // // // // // // // //     ctx.fillStyle = "rgba(0, 0, 0, 0)";
+// // // // // // // // // // // //     ctx.fillRect(0, 0, width, height);
+
+// // // // // // // // // // // //     let validPoints = 0;
+// // // // // // // // // // // //     clipped.features.forEach((feature) => {
+// // // // // // // // // // // //       const coords = feature.geometry.coordinates;
+// // // // // // // // // // // //       const point = turf.point(coords);
+
+// // // // // // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+
+// // // // // // // // // // // //       let pm25Value: number | null = null;
+// // // // // // // // // // // //       if (inBuffer && interpolated.features.length > 0) {
+// // // // // // // // // // // //         const closest = interpolated.features.reduce(
+// // // // // // // // // // // //           (acc, f) => {
+// // // // // // // // // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // // // // // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
+// // // // // // // // // // // //           },
+// // // // // // // // // // // //           { dist: Infinity, value: 0 }
+// // // // // // // // // // // //         );
+// // // // // // // // // // // //         pm25Value = closest.value;
+// // // // // // // // // // // //       } else {
+// // // // // // // // // // // //         const pm25Feature = geoData.features.find((f) => {
+// // // // // // // // // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
+// // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // //         });
+// // // // // // // // // // // //         pm25Value =
+// // // // // // // // // // // //           pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // // // // // // // //             ? pm25Feature.properties.pm25_value
+// // // // // // // // // // // //             : null;
+// // // // // // // // // // // //       }
+
+// // // // // // // // // // // //       if (pm25Value == null) return;
+
+// // // // // // // // // // // //       const color = interpolateColor(pm25Value);
+// // // // // // // // // // // //       const x = Math.round((coords[0] - bbox[0]) / cellSize);
+// // // // // // // // // // // //       const y = Math.round((bbox[3] - coords[1]) / cellSize);
+// // // // // // // // // // // //       ctx.fillStyle = color;
+// // // // // // // // // // // //       ctx.fillRect(x, y, 1, 1);
+// // // // // // // // // // // //       validPoints++;
+// // // // // // // // // // // //     });
+
+// // // // // // // // // // // //     console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
+
+// // // // // // // // // // // //     return { imageUrl: canvas.toDataURL(), bbox };
+// // // // // // // // // // // //   };
+
+// // // // // // // // // // // //   const cachedGrid = useMemo(() => {
+// // // // // // // // // // // //     if (!geoData || !boundaryData) {
+// // // // // // // // // // // //       console.warn("cachedGrid: Missing geoData or boundaryData");
+// // // // // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // // //     }
+// // // // // // // // // // // //     return generateStaticGrid(geoData, boundaryData);
+// // // // // // // // // // // //   }, [geoData, boundaryData]);
+
+// // // // // // // // // // // //   useEffect(() => {
+// // // // // // // // // // // //     if (!map || !geoData || !boundaryData) {
+// // // // // // // // // // // //       console.warn("useEffect: Missing map, geoData, or boundaryData");
+// // // // // // // // // // // //       return;
+// // // // // // // // // // // //     }
+
+// // // // // // // // // // // //     const { imageUrl, bbox } = cachedGrid;
+// // // // // // // // // // // //     console.log("useEffect: Image URL and bbox:", imageUrl, bbox);
+
+// // // // // // // // // // // //     if (staticLayerRef.current) {
+// // // // // // // // // // // //       map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // // //       staticLayerRef.current = null;
+// // // // // // // // // // // //     }
+// // // // // // // // // // // //     if (tooltipRef.current) {
+// // // // // // // // // // // //       tooltipRef.current.remove();
+// // // // // // // // // // // //       tooltipRef.current = null;
+// // // // // // // // // // // //     }
+
+// // // // // // // // // // // //     if (imageUrl) {
+// // // // // // // // // // // //       const bounds = [
+// // // // // // // // // // // //         [bbox[1], bbox[0]],
+// // // // // // // // // // // //         [bbox[3], bbox[2]],
+// // // // // // // // // // // //       ];
+// // // // // // // // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
+// // // // // // // // // // // //       console.log("useEffect: ImageOverlay added to map");
+// // // // // // // // // // // //     } else {
+// // // // // // // // // // // //       console.warn("useEffect: No valid imageUrl for ImageOverlay");
+// // // // // // // // // // // //     }
+
+// // // // // // // // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
+// // // // // // // // // // // //       if (document.activeElement === inputRef.current) {
+// // // // // // // // // // // //         return;
+// // // // // // // // // // // //       }
+// // // // // // // // // // // //       const { lat, lng } = e.latlng;
+// // // // // // // // // // // //       if (lastPosition.current && Math.abs(lastPosition.current.lat - lat) < 0.0001 && Math.abs(lastPosition.current.lng - lng) < 0.0001) {
+// // // // // // // // // // // //         return;
+// // // // // // // // // // // //       }
+// // // // // // // // // // // //       lastPosition.current = { lat, lng };
+
+// // // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+// // // // // // // // // // // //       timeoutRef.current = setTimeout(() => {
+// // // // // // // // // // // //         if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // // //         const point = turf.point([lng, lat]);
+
+// // // // // // // // // // // //         const candidates = spatialIndexRef.current?.search({
+// // // // // // // // // // // //           minX: lng,
+// // // // // // // // // // // //           minY: lat,
+// // // // // // // // // // // //           maxX: lng,
+// // // // // // // // // // // //           maxY: lat,
+// // // // // // // // // // // //         }) || [];
+
+// // // // // // // // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
+// // // // // // // // // // // //           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
+// // // // // // // // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
+// // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // //         });
+
+// // // // // // // // // // // //         const pm25Feature = geoData.features.find((feature) => {
+// // // // // // // // // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(feature.geometry.coordinates);
+// // // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // // //         });
+// // // // // // // // // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+
+// // // // // // // // // // // //         if (kelurahan?.properties) {
+// // // // // // // // // // // //           tooltipRef.current = L.tooltip({
+// // // // // // // // // // // //             sticky: true,
+// // // // // // // // // // // //             direction: "top",
+// // // // // // // // // // // //             offset: [0, -20],
+// // // // // // // // // // // //             className: styles.customTooltip,
+// // // // // // // // // // // //           })
+// // // // // // // // // // // //             .setLatLng(e.latlng)
+// // // // // // // // // // // //             .setContent(getTooltipContent(pm25Value, kelurahan.properties.NAMOBJ))
+// // // // // // // // // // // //             .addTo(map);
+// // // // // // // // // // // //         }
+// // // // // // // // // // // //       }, 500);
+// // // // // // // // // // // //     };
+
+// // // // // // // // // // // //     map.on("mousemove", handleMouseMove);
+
+// // // // // // // // // // // //     return () => {
+// // // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+// // // // // // // // // // // //       map.off("mousemove", handleMouseMove);
+// // // // // // // // // // // //       if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // // //       if (staticLayerRef.current) map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // // //     };
+// // // // // // // // // // // //   }, [map, cachedGrid, selectedDate, inputRef, geoData, boundaryData]);
+
+// // // // // // // // // // // //   return (
+// // // // // // // // // // // //     <>
+// // // // // // // // // // // //       {isLoading && (
+// // // // // // // // // // // //         <div className={styles.loadingOverlay}>
+// // // // // // // // // // // //           <div className={styles.spinner}></div>
+// // // // // // // // // // // //           <span>Memuat Heatmap...</span>
+// // // // // // // // // // // //         </div>
+// // // // // // // // // // // //       )}
+// // // // // // // // // // // //       <div className={styles.legend}>
+// // // // // // // // // // // //         <h4>Indikator PM2.5 (µg/m³)</h4>
+// // // // // // // // // // // //         <div className={styles.gradientLegend}>
+// // // // // // // // // // // //           <div
+// // // // // // // // // // // //             className={styles.gradientBar}
+// // // // // // // // // // // //             style={{
+// // // // // // // // // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // // // // // // // // //             }}
+// // // // // // // // // // // //           ></div>
+// // // // // // // // // // // //           <div className={styles.gradientLabels}>
+// // // // // // // // // // // //             <span>0</span>
+// // // // // // // // // // // //             <span>300+</span>
+// // // // // // // // // // // //           </div>
+// // // // // // // // // // // //           <div className={styles.legendLabels}>
+// // // // // // // // // // // //             <span>Baik (0 - 50)</span>
+// // // // // // // // // // // //             <span>Sedang (51 - 100)</span>
+// // // // // // // // // // // //             <span>Tidak Sehat (101 - 199)</span>
+// // // // // // // // // // // //             <span>Sangat Tidak Sehat (200 - 299)</span>
+// // // // // // // // // // // //             <span>Berbahaya (&gt; 300)</span>
+// // // // // // // // // // // //           </div>
+// // // // // // // // // // // //         </div>
+// // // // // // // // // // // //       </div>
+// // // // // // // // // // // //     </>
+// // // // // // // // // // // //   );
+// // // // // // // // // // // // };
+
+// // // // // // // // // // // // export default HeatMapLayer;
+
+// // // // // // // // // // // "use client";
+
+// // // // // // // // // // // import { useEffect, useRef, useMemo } from "react";
+// // // // // // // // // // // import { useMap } from "react-leaflet";
+// // // // // // // // // // // import L from "leaflet";
+// // // // // // // // // // // import * as turf from "@turf/turf";
+// // // // // // // // // // // import * as GeoJSON from "geojson";
+// // // // // // // // // // // import RBush from "rbush";
+// // // // // // // // // // // import styles from "./map.module.css";
+
+// // // // // // // // // // // interface FeatureProperties {
+// // // // // // // // // // //   pm25_value: number;
+// // // // // // // // // // // }
+
+// // // // // // // // // // // interface BoundaryProperties {
+// // // // // // // // // // //   NAMOBJ: string;
+// // // // // // // // // // // }
+
+// // // // // // // // // // // interface Feature {
+// // // // // // // // // // //   type: string;
+// // // // // // // // // // //   id: number;
+// // // // // // // // // // //   properties: FeatureProperties;
+// // // // // // // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+// // // // // // // // // // // }
+
+// // // // // // // // // // // interface BoundaryFeature {
+// // // // // // // // // // //   type: string;
+// // // // // // // // // // //   properties: BoundaryProperties;
+// // // // // // // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+// // // // // // // // // // // }
+
+// // // // // // // // // // // interface GeoJSONData {
+// // // // // // // // // // //   type: string;
+// // // // // // // // // // //   features: Feature[];
+// // // // // // // // // // // }
+
+// // // // // // // // // // // interface BoundaryGeoJSONData {
+// // // // // // // // // // //   type: string;
+// // // // // // // // // // //   features: BoundaryFeature[];
+// // // // // // // // // // // }
+
+// // // // // // // // // // // interface HeatMapLayerProps {
+// // // // // // // // // // //   geoData: GeoJSONData | null;
+// // // // // // // // // // //   boundaryData: BoundaryGeoJSONData | null;
+// // // // // // // // // // //   selectedDate: string;
+// // // // // // // // // // //   isLoading: boolean;
+// // // // // // // // // // //   inputRef: React.RefObject<HTMLInputElement>;
+// // // // // // // // // // // }
+
+// // // // // // // // // // // interface RBushItem {
+// // // // // // // // // // //   minX: number;
+// // // // // // // // // // //   minY: number;
+// // // // // // // // // // //   maxX: number;
+// // // // // // // // // // //   maxY: number;
+// // // // // // // // // // //   featureIndex: number;
+// // // // // // // // // // // }
+
+// // // // // // // // // // // interface InterpolatedFeature {
+// // // // // // // // // // //   type: string;
+// // // // // // // // // // //   geometry: GeoJSON.Point;
+// // // // // // // // // // //   properties: { pm25: number };
+// // // // // // // // // // // }
+
+// // // // // // // // // // // const interpolateColor = (value: number): string => {
+// // // // // // // // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
+// // // // // // // // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
+// // // // // // // // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
+// // // // // // // // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
+// // // // // // // // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // // // // // // // // };
+
+// // // // // // // // // // // const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
+// // // // // // // // // // //   const map = useMap();
+// // // // // // // // // // //   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
+// // // // // // // // // // //   const tooltipRef = useRef<L.Tooltip | null>(null);
+// // // // // // // // // // //   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+// // // // // // // // // // //   const lastPosition = useRef<{ lat: number; lng: number } | null> (null);
+// // // // // // // // // // //   const interpolatedDataRef = useRef<InterpolatedFeature[]>([]);
+// // // // // // // // // // //   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
+
+// // // // // // // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
+// // // // // // // // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
+// // // // // // // // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
+// // // // // // // // // // //     const textColor = pm25Color === "#00ff00" || pm25Color === "#ffff00" ? "#000000" : "#ffffff";
+// // // // // // // // // // //     return `
+// // // // // // // // // // //       <div class="${styles.customTooltip}">
+// // // // // // // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
+// // // // // // // // // // //         <div class="${styles.aodContainer}">
+// // // // // // // // // // //           <div class="${styles.aodCircle}" style="background-color: ${pm25Color}; color: ${textColor}">
+// // // // // // // // // // //             ${formattedPM25Value}
+// // // // // // // // // // //           </div>
+// // // // // // // // // // //         </div>
+// // // // // // // // // // //       </div>
+// // // // // // // // // // //     `;
+// // // // // // // // // // //   };
+
+// // // // // // // // // // //   const cachedBoundaries = useMemo(() => {
+// // // // // // // // // // //     if (!geoData) return turf.featureCollection([]);
+// // // // // // // // // // //     const validFeatures = geoData.features
+// // // // // // // // // // //       .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
+// // // // // // // // // // //       .map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" }))
+// // // // // // // // // // //       .filter((f): f is turf.Feature<turf.Polygon | turf.MultiPolygon> => f != null);
+// // // // // // // // // // //     return turf.featureCollection(validFeatures);
+// // // // // // // // // // //   }, [geoData]);
+
+// // // // // // // // // // //   useEffect(() => {
+// // // // // // // // // // //     if (!boundaryData) return;
+// // // // // // // // // // //     const spatialIndex = new RBush<RBushItem>();
+// // // // // // // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // // // // // // // //       const bbox = turf.bbox(feature.geometry);
+// // // // // // // // // // //       spatialIndex.insert({
+// // // // // // // // // // //         minX: bbox[0],
+// // // // // // // // // // //         minY: bbox[1],
+// // // // // // // // // // //         maxX: bbox[2],
+// // // // // // // // // // //         maxY: bbox[3],
+// // // // // // // // // // //         featureIndex: index,
+// // // // // // // // // // //       });
+// // // // // // // // // // //     });
+// // // // // // // // // // //     spatialIndexRef.current = spatialIndex;
+
+// // // // // // // // // // //     return () => {
+// // // // // // // // // // //       spatialIndexRef.current = null;
+// // // // // // // // // // //     };
+// // // // // // // // // // //   }, [boundaryData]);
+
+// // // // // // // // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // // // // // // // // //     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
+
+// // // // // // // // // // //     const points = geoData.features
+// // // // // // // // // // //       .map((feature) => {
+// // // // // // // // // // //         const centroid = turf.centroid(feature.geometry);
+// // // // // // // // // // //         const pm25 = feature.properties.pm25_value;
+// // // // // // // // // // //         if (pm25 == null || isNaN(pm25)) {
+// // // // // // // // // // //           console.log("Skipping feature due to invalid pm25_value:", feature);
+// // // // // // // // // // //           return null;
+// // // // // // // // // // //         }
+// // // // // // // // // // //         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
+// // // // // // // // // // //       })
+// // // // // // // // // // //       .filter((p): p is [number, number, number] => p !== null);
+
+// // // // // // // // // // //     console.log("generateStaticGrid: Valid points for interpolation:", points.length, points);
+
+// // // // // // // // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // // // // // // // //     console.log("generateStaticGrid: Bounding box:", bbox);
+
+// // // // // // // // // // //     const cellSize = 0.02;
+// // // // // // // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
+// // // // // // // // // // //     console.log("generateStaticGrid: Grid points created:", grid.features.length);
+
+// // // // // // // // // // //     let interpolated = turf.featureCollection([]);
+// // // // // // // // // // //     if (points.length > 0) {
+// // // // // // // // // // //       try {
+// // // // // // // // // // //         interpolated = turf.interpolate(
+// // // // // // // // // // //           turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { pm25: p[2] }))),
+// // // // // // // // // // //           cellSize / 4,
+// // // // // // // // // // //           { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 }
+// // // // // // // // // // //         );
+// // // // // // // // // // //         console.log("generateStaticGrid: Interpolated points:", interpolated.features.length);
+// // // // // // // // // // //       } catch (error) {
+// // // // // // // // // // //         console.error("Interpolation error:", error);
+// // // // // // // // // // //         return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // //       }
+// // // // // // // // // // //     } else {
+// // // // // // // // // // //       console.warn("generateStaticGrid: No valid points for interpolation");
+// // // // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // //     }
+// // // // // // // // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
+
+// // // // // // // // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // // // // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
+// // // // // // // // // // //     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
+
+// // // // // // // // // // //     const canvas = document.createElement("canvas");
+// // // // // // // // // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
+// // // // // // // // // // //     const height = Math.ceil((bbox[3] - bbox[1]) / cellSize);
+// // // // // // // // // // //     canvas.width = width;
+// // // // // // // // // // //     canvas.height = height;
+// // // // // // // // // // //     const ctx = canvas.getContext("2d");
+
+// // // // // // // // // // //     if (!ctx) {
+// // // // // // // // // // //       console.error("generateStaticGrid: Failed to get canvas context");
+// // // // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // //     }
+
+// // // // // // // // // // //     ctx.fillStyle = "rgba(0, 0, 0, 0)";
+// // // // // // // // // // //     ctx.fillRect(0, 0, width, height);
+
+// // // // // // // // // // //     let validPoints = 0;
+// // // // // // // // // // //     clipped.features.forEach((feature) => {
+// // // // // // // // // // //       const coords = feature.geometry.coordinates;
+// // // // // // // // // // //       const point = turf.point(coords);
+
+// // // // // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+
+// // // // // // // // // // //       let pm25Value: number | null = null;
+// // // // // // // // // // //       if (inBuffer && interpolated.features.length > 0) {
+// // // // // // // // // // //         const closest = interpolated.features.reduce(
+// // // // // // // // // // //           (acc, f) => {
+// // // // // // // // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // // // // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
+// // // // // // // // // // //           },
+// // // // // // // // // // //           { dist: Infinity, value: 0 }
+// // // // // // // // // // //         );
+// // // // // // // // // // //         pm25Value = closest.value;
+// // // // // // // // // // //       } else {
+// // // // // // // // // // //         const pm25Feature = geoData.features.find((f) => {
+// // // // // // // // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
+// // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // //         });
+// // // // // // // // // // //         pm25Value =
+// // // // // // // // // // //           pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // // // // // // //             ? pm25Feature.properties.pm25_value
+// // // // // // // // // // //             : null;
+// // // // // // // // // // //       }
+
+// // // // // // // // // // //       if (pm25Value == null) return;
+
+// // // // // // // // // // //       const color = interpolateColor(pm25Value);
+// // // // // // // // // // //       const x = Math.round((coords[0] - bbox[0]) / cellSize);
+// // // // // // // // // // //       const y = Math.round((bbox[3] - coords[1]) / cellSize);
+// // // // // // // // // // //       ctx.fillStyle = color;
+// // // // // // // // // // //       ctx.fillRect(x, y, 1, 1);
+// // // // // // // // // // //       validPoints++;
+// // // // // // // // // // //     });
+
+// // // // // // // // // // //     console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
+
+// // // // // // // // // // //     return { imageUrl: canvas.toDataURL(), bbox };
+// // // // // // // // // // //   };
+
+// // // // // // // // // // //   const cachedGrid = useMemo(() => {
+// // // // // // // // // // //     if (!geoData || !boundaryData) {
+// // // // // // // // // // //       console.warn("cachedGrid: Missing geoData or boundaryData");
+// // // // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // // //     }
+// // // // // // // // // // //     return generateStaticGrid(geoData, boundaryData);
+// // // // // // // // // // //   }, [geoData, boundaryData]);
+
+// // // // // // // // // // //   useEffect(() => {
+// // // // // // // // // // //     if (!map || !geoData || !boundaryData) {
+// // // // // // // // // // //       console.warn("useEffect: Missing map, geoData, or boundaryData");
+// // // // // // // // // // //       return;
+// // // // // // // // // // //     }
+
+// // // // // // // // // // //     const { imageUrl, bbox } = cachedGrid;
+// // // // // // // // // // //     console.log("useEffect: Image URL and bbox:", imageUrl, bbox);
+
+// // // // // // // // // // //     if (staticLayerRef.current) {
+// // // // // // // // // // //       map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // //       staticLayerRef.current = null;
+// // // // // // // // // // //     }
+// // // // // // // // // // //     if (tooltipRef.current) {
+// // // // // // // // // // //       tooltipRef.current.remove();
+// // // // // // // // // // //       tooltipRef.current = null;
+// // // // // // // // // // //     }
+
+// // // // // // // // // // //     if (imageUrl) {
+// // // // // // // // // // //       const bounds = [
+// // // // // // // // // // //         [bbox[1], bbox[0]],
+// // // // // // // // // // //         [bbox[3], bbox[2]],
+// // // // // // // // // // //       ];
+// // // // // // // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
+// // // // // // // // // // //       console.log("useEffect: ImageOverlay added to map");
+// // // // // // // // // // //     } else {
+// // // // // // // // // // //       console.warn("useEffect: No valid imageUrl for ImageOverlay");
+// // // // // // // // // // //     }
+
+// // // // // // // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
+// // // // // // // // // // //       if (document.activeElement === inputRef.current) {
+// // // // // // // // // // //         return;
+// // // // // // // // // // //       }
+// // // // // // // // // // //       const { lat, lng } = e.latlng;
+// // // // // // // // // // //       if (lastPosition.current && Math.abs(lastPosition.current.lat - lat) < 0.0001 && Math.abs(lastPosition.current.lng - lng) < 0.0001) {
+// // // // // // // // // // //         return;
+// // // // // // // // // // //       }
+// // // // // // // // // // //       lastPosition.current = { lat, lng };
+
+// // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+// // // // // // // // // // //       timeoutRef.current = setTimeout(() => {
+// // // // // // // // // // //         if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // //         const point = turf.point([lng, lat]);
+
+// // // // // // // // // // //         const candidates = spatialIndexRef.current?.search({
+// // // // // // // // // // //           minX: lng,
+// // // // // // // // // // //           minY: lat,
+// // // // // // // // // // //           maxX: lng,
+// // // // // // // // // // //           maxY: lat,
+// // // // // // // // // // //         }) || [];
+
+// // // // // // // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
+// // // // // // // // // // //           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
+// // // // // // // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
+// // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // //         });
+
+// // // // // // // // // // //         const pm25Feature = geoData.features.find((feature) => {
+// // // // // // // // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
+// // // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // // //         });
+// // // // // // // // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+
+// // // // // // // // // // //         if (kelurahan?.properties) {
+// // // // // // // // // // //           tooltipRef.current = L.tooltip({
+// // // // // // // // // // //             sticky: true,
+// // // // // // // // // // //             direction: "top",
+// // // // // // // // // // //             offset: [0, -20],
+// // // // // // // // // // //             className: styles.customTooltip,
+// // // // // // // // // // //           })
+// // // // // // // // // // //             .setLatLng(e.latlng)
+// // // // // // // // // // //             .setContent(getTooltipContent(pm25Value, kelurahan.properties.NAMOBJ))
+// // // // // // // // // // //             .addTo(map);
+// // // // // // // // // // //         }
+// // // // // // // // // // //       }, 500);
+// // // // // // // // // // //     };
+
+// // // // // // // // // // //     map.on("mousemove", handleMouseMove);
+
+// // // // // // // // // // //     return () => {
+// // // // // // // // // // //       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+// // // // // // // // // // //       map.off("mousemove", handleMouseMove);
+// // // // // // // // // // //       if (tooltipRef.current) tooltipRef.current.remove();
+// // // // // // // // // // //       if (staticLayerRef.current) map.removeLayer(staticLayerRef.current);
+// // // // // // // // // // //     };
+// // // // // // // // // // //   }, [map, cachedGrid, selectedDate, inputRef, geoData, boundaryData]);
+
+// // // // // // // // // // //   return (
+// // // // // // // // // // //     <>
+// // // // // // // // // // //       {isLoading && (
+// // // // // // // // // // //         <div className={styles.loadingOverlay}>
+// // // // // // // // // // //           <div className={styles.spinner}></div>
+// // // // // // // // // // //           <span>Memuat Heatmap...</span>
+// // // // // // // // // // //         </div>
+// // // // // // // // // // //       )}
+// // // // // // // // // // //       <div className={styles.legend}>
+// // // // // // // // // // //         <h4>Indikator PM2.5 (µg/m³)</h4>
+// // // // // // // // // // //         <div className={styles.gradientLegend}>
+// // // // // // // // // // //           <div
+// // // // // // // // // // //             className={styles.gradientBar}
+// // // // // // // // // // //             style={{
+// // // // // // // // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // // // // // // // //             }}
+// // // // // // // // // // //           ></div>
+// // // // // // // // // // //           <div className={styles.gradientLabels}>
+// // // // // // // // // // //             <span>0</span>
+// // // // // // // // // // //             <span>300+</span>
+// // // // // // // // // // //           </div>
+// // // // // // // // // // //           <div className={styles.legendLabels}>
+// // // // // // // // // // //             <span>Baik (0 - 50)</span>
+// // // // // // // // // // //             <span>Sedang (51 - 100)</span>
+// // // // // // // // // // //             <span>Tidak Sehat (101 - 199)</span>
+// // // // // // // // // // //             <span>Sangat Tidak Sehat (200 - 299)</span>
+// // // // // // // // // // //             <span>Berbahaya (&gt; 300)</span>
+// // // // // // // // // // //           </div>
+// // // // // // // // // // //         </div>
+// // // // // // // // // // //       </div>
+// // // // // // // // // // //     </>
+// // // // // // // // // // //   );
+// // // // // // // // // // // };
+
+// // // // // // // // // // // export default HeatMapLayer;
+
 // // // // // // // // // // "use client";
 
 // // // // // // // // // // import { useEffect, useRef, useMemo } from "react";
 // // // // // // // // // // import { useMap } from "react-leaflet";
 // // // // // // // // // // import L from "leaflet";
 // // // // // // // // // // import * as turf from "@turf/turf";
+// // // // // // // // // // import * as GeoJSON from "geojson";
 // // // // // // // // // // import RBush from "rbush";
 // // // // // // // // // // import styles from "./map.module.css";
 
 // // // // // // // // // // interface FeatureProperties {
-// // // // // // // // // //   pm25_value: number;
+// // // // // // // // // //   pm25_value: number | null; // Tambahkan null untuk data kosong
 // // // // // // // // // // }
 
 // // // // // // // // // // interface BoundaryProperties {
 // // // // // // // // // //   NAMOBJ: string;
 // // // // // // // // // // }
 
-// // // // // // // // // // interface Feature {
-// // // // // // // // // //   type: string;
-// // // // // // // // // //   id: number;
+// // // // // // // // // // interface Feature extends GeoJSON.Feature {
+// // // // // // // // // //   id?: number; // id bersifat opsional
 // // // // // // // // // //   properties: FeatureProperties;
-// // // // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
+// // // // // // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
 // // // // // // // // // // }
 
-// // // // // // // // // // interface BoundaryFeature {
-// // // // // // // // // //   type: string;
+// // // // // // // // // // interface BoundaryFeature extends GeoJSON.Feature {
 // // // // // // // // // //   properties: BoundaryProperties;
-// // // // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
+// // // // // // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
 // // // // // // // // // // }
 
-// // // // // // // // // // interface GeoJSONData {
-// // // // // // // // // //   type: string;
+// // // // // // // // // // interface GeoJSONData extends GeoJSON.FeatureCollection {
 // // // // // // // // // //   features: Feature[];
 // // // // // // // // // // }
 
-// // // // // // // // // // interface BoundaryGeoJSONData {
-// // // // // // // // // //   type: string;
+// // // // // // // // // // interface BoundaryGeoJSONData extends GeoJSON.FeatureCollection {
 // // // // // // // // // //   features: BoundaryFeature[];
 // // // // // // // // // // }
 
@@ -46,28 +2071,40 @@
 // // // // // // // // // //   inputRef: React.RefObject<HTMLInputElement>;
 // // // // // // // // // // }
 
+// // // // // // // // // // interface RBushItem {
+// // // // // // // // // //   minX: number;
+// // // // // // // // // //   minY: number;
+// // // // // // // // // //   maxX: number;
+// // // // // // // // // //   maxY: number;
+// // // // // // // // // //   featureIndex: number;
+// // // // // // // // // // }
+
+// // // // // // // // // // interface InterpolatedFeature extends GeoJSON.Feature {
+// // // // // // // // // //   geometry: GeoJSON.Point;
+// // // // // // // // // //   properties: { pm25: number };
+// // // // // // // // // // }
+
 // // // // // // // // // // const interpolateColor = (value: number): string => {
-// // // // // // // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
-// // // // // // // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
-// // // // // // // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
-// // // // // // // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
-// // // // // // // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // // // // // // //   if (value <= 50) return "rgba(0, 255, 0, 0.85)"; // Baik (Hijau)
+// // // // // // // // // //   if (value <= 100) return "rgba(0, 0, 255, 0.85)"; // Sedang (Biru)
+// // // // // // // // // //   if (value <= 199) return "rgba(255, 255, 0, 0.85)"; // Tidak Sehat (Kuning)
+// // // // // // // // // //   if (value <= 299) return "rgba(255, 0, 0, 0.85)"; // Sangat Tidak Sehat (Merah)
+// // // // // // // // // //   return "rgba(0, 0, 0, 0.85)"; // Berbahaya (Hitam)
 // // // // // // // // // // };
 
-// // // // // // // // // // const HeatMapLayer = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }: HeatMapLayerProps) => {
+// // // // // // // // // // const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
 // // // // // // // // // //   const map = useMap();
 // // // // // // // // // //   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
 // // // // // // // // // //   const tooltipRef = useRef<L.Tooltip | null>(null);
 // // // // // // // // // //   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 // // // // // // // // // //   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
-// // // // // // // // // //   const interpolatedDataRef = useRef<any[]>([]);
-// // // // // // // // // //   const spatialIndexRef = useRef<RBush | null>(null);
+// // // // // // // // // //   const interpolatedDataRef = useRef<InterpolatedFeature[]>([]);
+// // // // // // // // // //   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
 
 // // // // // // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
-// // // // // // // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
-// // // // // // // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
-// // // // // // // // // //     // Warna teks hanya untuk nilai PM2.5, nama kelurahan tetap default (#374151 dari CSS)
-// // // // // // // // // //     const textColor = (pm25Color === "#00ff00" || pm25Color === "#ffff00") ? "#000000" : "#ffffff";
+// // // // // // // // // //     const formattedPM25Value = pm25Value !== null && !isNaN(pm25Value) ? pm25Value.toFixed(2) : "N/A";
+// // // // // // // // // //     const pm25Color = pm25Value !== null && !isNaN(pm25Value) ? interpolateColor(pm25Value) : "rgba(160, 174, 192, 0.85)";
+// // // // // // // // // //     const textColor = pm25Color === "rgba(0, 255, 0, 0.85)" || pm25Color === "rgba(255, 255, 0, 0.85)" ? "#000000" : "#ffffff";
 // // // // // // // // // //     return `
 // // // // // // // // // //       <div class="${styles.customTooltip}">
 // // // // // // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
@@ -82,13 +2119,24 @@
 
 // // // // // // // // // //   const cachedBoundaries = useMemo(() => {
 // // // // // // // // // //     if (!geoData) return turf.featureCollection([]);
-// // // // // // // // // //     return turf.featureCollection(geoData.features.filter((f) => f.properties.pm25_value != null && f.properties.pm25_value >= 0).map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" })));
+// // // // // // // // // //     const validFeatures = geoData.features
+// // // // // // // // // //       .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
+// // // // // // // // // //       .map((feature) => {
+// // // // // // // // // //         const buffered = turf.buffer(feature.geometry, 0.002, { units: "degrees" });
+// // // // // // // // // //         if (buffered && (buffered.geometry.type === "Polygon" || buffered.geometry.type === "MultiPolygon")) {
+// // // // // // // // // //           return buffered as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+// // // // // // // // // //         }
+// // // // // // // // // //         return null;
+// // // // // // // // // //       })
+// // // // // // // // // //       .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => f != null);
+// // // // // // // // // //     return turf.featureCollection(validFeatures);
 // // // // // // // // // //   }, [geoData]);
 
-// // // // // // // // // //   const initializeSpatialIndex = useMemo(() => {
-// // // // // // // // // //     if (!boundaryData) return () => {};
-// // // // // // // // // //     const spatialIndex = new RBush();
+// // // // // // // // // //   useEffect(() => {
+// // // // // // // // // //     if (!boundaryData) return;
+// // // // // // // // // //     const spatialIndex = new RBush<RBushItem>();
 // // // // // // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // // // // // // //       if (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon") return;
 // // // // // // // // // //       const bbox = turf.bbox(feature.geometry);
 // // // // // // // // // //       spatialIndex.insert({
 // // // // // // // // // //         minX: bbox[0],
@@ -99,38 +2147,71 @@
 // // // // // // // // // //       });
 // // // // // // // // // //     });
 // // // // // // // // // //     spatialIndexRef.current = spatialIndex;
+
 // // // // // // // // // //     return () => {
 // // // // // // // // // //       spatialIndexRef.current = null;
 // // // // // // // // // //     };
 // // // // // // // // // //   }, [boundaryData]);
 
 // // // // // // // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // // // // // // // //     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
+
+// // // // // // // // // //     if (!boundaryData || !boundaryData.features) {
+// // // // // // // // // //       console.warn("generateStaticGrid: boundaryData is null or has no features");
+// // // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // //     }
+
+// // // // // // // // // //     const validBoundaryFeatures = boundaryData.features.filter(
+// // // // // // // // // //       (f): f is BoundaryFeature => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"
+// // // // // // // // // //     );
+// // // // // // // // // //     if (validBoundaryFeatures.length === 0) {
+// // // // // // // // // //       console.warn("generateStaticGrid: No valid Polygon or MultiPolygon features in boundaryData");
+// // // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // //     }
+
 // // // // // // // // // //     const points = geoData.features
 // // // // // // // // // //       .map((feature) => {
 // // // // // // // // // //         const centroid = turf.centroid(feature.geometry);
 // // // // // // // // // //         const pm25 = feature.properties.pm25_value;
-// // // // // // // // // //         if (pm25 == null || pm25 < 0 || isNaN(pm25)) return null;
+// // // // // // // // // //         if (pm25 == null || isNaN(pm25)) {
+// // // // // // // // // //           console.log("Skipping feature due to invalid pm25_value:", feature);
+// // // // // // // // // //           return null;
+// // // // // // // // // //         }
 // // // // // // // // // //         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
 // // // // // // // // // //       })
 // // // // // // // // // //       .filter((p): p is [number, number, number] => p !== null);
 
-// // // // // // // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // // // // // // //     console.log("generateStaticGrid: Valid points for interpolation:", points.length, points);
+
+// // // // // // // // // //     const bbox = turf.bbox(turf.featureCollection(validBoundaryFeatures));
+// // // // // // // // // //     console.log("generateStaticGrid: Bounding box:", bbox);
+
 // // // // // // // // // //     const cellSize = 0.02;
 // // // // // // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
+// // // // // // // // // //     console.log("generateStaticGrid: Grid points created:", grid.features.length);
 
 // // // // // // // // // //     let interpolated = turf.featureCollection([]);
 // // // // // // // // // //     if (points.length > 0) {
 // // // // // // // // // //       try {
-// // // // // // // // // //         interpolated = turf.interpolate(turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { pm25: p[2] }))), cellSize / 4, { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 });
+// // // // // // // // // //         interpolated = turf.interpolate(
+// // // // // // // // // //           turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { pm25: p[2] }))),
+// // // // // // // // // //           cellSize / 4,
+// // // // // // // // // //           { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 }
+// // // // // // // // // //         );
+// // // // // // // // // //         console.log("generateStaticGrid: Interpolated points:", interpolated.features.length);
 // // // // // // // // // //       } catch (error) {
 // // // // // // // // // //         console.error("Interpolation error:", error);
 // // // // // // // // // //         return { imageUrl: null, bbox: [0, 0, 0, 0] };
 // // // // // // // // // //       }
+// // // // // // // // // //     } else {
+// // // // // // // // // //       console.warn("generateStaticGrid: No valid points for interpolation");
+// // // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
 // // // // // // // // // //     }
-// // // // // // // // // //     interpolatedDataRef.current = interpolated.features;
+// // // // // // // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
 
-// // // // // // // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // // // // // // //     const boundaryPolygon = turf.featureCollection(validBoundaryFeatures);
 // // // // // // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
+// // // // // // // // // //     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
 
 // // // // // // // // // //     const canvas = document.createElement("canvas");
 // // // // // // // // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
@@ -139,33 +2220,51 @@
 // // // // // // // // // //     canvas.height = height;
 // // // // // // // // // //     const ctx = canvas.getContext("2d");
 
-// // // // // // // // // //     if (!ctx) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // //     if (!ctx) {
+// // // // // // // // // //       console.error("generateStaticGrid: Failed to get canvas context");
+// // // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // //     }
 
 // // // // // // // // // //     ctx.fillStyle = "rgba(0, 0, 0, 0)";
 // // // // // // // // // //     ctx.fillRect(0, 0, width, height);
 
+// // // // // // // // // //     let validPoints = 0;
 // // // // // // // // // //     clipped.features.forEach((feature) => {
 // // // // // // // // // //       const coords = feature.geometry.coordinates;
-// // // // // // // // // //       const point = turf.point(coords);
+// // // // // // // // // //       if (!Array.isArray(coords) || coords.length !== 2 || typeof coords[0] !== "number" || typeof coords[1] !== "number") {
+// // // // // // // // // //         console.warn("Invalid coordinates, skipping:", coords);
+// // // // // // // // // //         return;
+// // // // // // // // // //       }
 
-// // // // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+// // // // // // // // // //       const point = turf.point(coords as [number, number]);
+
+// // // // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) =>
+// // // // // // // // // //         turf.booleanPointInPolygon(point, buffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)
+// // // // // // // // // //       );
 
 // // // // // // // // // //       let pm25Value: number | null = null;
 // // // // // // // // // //       if (inBuffer && interpolated.features.length > 0) {
 // // // // // // // // // //         const closest = interpolated.features.reduce(
 // // // // // // // // // //           (acc, f) => {
-// // // // // // // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // // // // // // //             if (f.geometry.type !== "Point" || !f.properties) return acc;
+// // // // // // // // // //             const dist = turf.distance(f.geometry as GeoJSON.Point, coords as [number, number], { units: "degrees" });
 // // // // // // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
 // // // // // // // // // //           },
 // // // // // // // // // //           { dist: Infinity, value: 0 }
 // // // // // // // // // //         );
-// // // // // // // // // //         pm25Value = closest.value;
+// // // // // // // // // //         pm25Value = closest.value > 0 ? closest.value : null;
 // // // // // // // // // //       } else {
 // // // // // // // // // //         const pm25Feature = geoData.features.find((f) => {
-// // // // // // // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
-// // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // //           if (f.geometry.type === "Polygon") {
+// // // // // // // // // //             return turf.booleanPointInPolygon(point, turf.polygon(f.geometry.coordinates));
+// // // // // // // // // //           } else if (f.geometry.type === "MultiPolygon") {
+// // // // // // // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(f.geometry.coordinates));
+// // // // // // // // // //           }
+// // // // // // // // // //           return false;
 // // // // // // // // // //         });
-// // // // // // // // // //         pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && pm25Feature.properties.pm25_value >= 0 ? pm25Feature.properties.pm25_value : null;
+// // // // // // // // // //         pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // // // // // //           ? pm25Feature.properties.pm25_value
+// // // // // // // // // //           : null;
 // // // // // // // // // //       }
 
 // // // // // // // // // //       if (pm25Value == null) return;
@@ -175,22 +2274,30 @@
 // // // // // // // // // //       const y = Math.round((bbox[3] - coords[1]) / cellSize);
 // // // // // // // // // //       ctx.fillStyle = color;
 // // // // // // // // // //       ctx.fillRect(x, y, 1, 1);
+// // // // // // // // // //       validPoints++;
 // // // // // // // // // //     });
+
+// // // // // // // // // //     console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
 
 // // // // // // // // // //     return { imageUrl: canvas.toDataURL(), bbox };
 // // // // // // // // // //   };
 
 // // // // // // // // // //   const cachedGrid = useMemo(() => {
-// // // // // // // // // //     if (!geoData || !boundaryData) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // //     if (!geoData || !boundaryData) {
+// // // // // // // // // //       console.warn("cachedGrid: Missing geoData or boundaryData");
+// // // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // // //     }
 // // // // // // // // // //     return generateStaticGrid(geoData, boundaryData);
 // // // // // // // // // //   }, [geoData, boundaryData]);
 
 // // // // // // // // // //   useEffect(() => {
 // // // // // // // // // //     if (!map || !geoData || !boundaryData) {
+// // // // // // // // // //       console.warn("useEffect: Missing map, geoData, or boundaryData");
 // // // // // // // // // //       return;
 // // // // // // // // // //     }
 
 // // // // // // // // // //     const { imageUrl, bbox } = cachedGrid;
+// // // // // // // // // //     console.log("useEffect: Image URL and bbox:", imageUrl, bbox);
 
 // // // // // // // // // //     if (staticLayerRef.current) {
 // // // // // // // // // //       map.removeLayer(staticLayerRef.current);
@@ -201,16 +2308,19 @@
 // // // // // // // // // //       tooltipRef.current = null;
 // // // // // // // // // //     }
 
-// // // // // // // // // //     if (imageUrl) {
-// // // // // // // // // //       const bounds = [
-// // // // // // // // // //         [bbox[1], bbox[0]],
-// // // // // // // // // //         [bbox[3], bbox[2]],
+// // // // // // // // // //     if (imageUrl && Array.isArray(bbox) && bbox.length === 4 && bbox.every((val) => typeof val === "number" && !isNaN(val))) {
+// // // // // // // // // //       const bounds: L.LatLngBoundsExpression = [
+// // // // // // // // // //         [bbox[1], bbox[0]], // [latMin, lngMin]
+// // // // // // // // // //         [bbox[3], bbox[2]], // [latMax, lngMax]
 // // // // // // // // // //       ];
 // // // // // // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
+// // // // // // // // // //       console.log("useEffect: ImageOverlay added to map");
+// // // // // // // // // //     } else {
+// // // // // // // // // //       console.warn("useEffect: Invalid imageUrl or bbox", { imageUrl, bbox });
 // // // // // // // // // //     }
 
 // // // // // // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
-// // // // // // // // // //       if (document.activeElement === inputRef.current) {
+// // // // // // // // // //       if (inputRef.current && document.activeElement === inputRef.current) {
 // // // // // // // // // //         return;
 // // // // // // // // // //       }
 // // // // // // // // // //       const { lat, lng } = e.latlng;
@@ -225,25 +2335,31 @@
 // // // // // // // // // //         if (tooltipRef.current) tooltipRef.current.remove();
 // // // // // // // // // //         const point = turf.point([lng, lat]);
 
-// // // // // // // // // //         const candidates =
-// // // // // // // // // //           spatialIndexRef.current?.search({
-// // // // // // // // // //             minX: lng,
-// // // // // // // // // //             minY: lat,
-// // // // // // // // // //             maxX: lng,
-// // // // // // // // // //             maxY: lat,
-// // // // // // // // // //           }) || [];
+// // // // // // // // // //         const candidates = spatialIndexRef.current?.search({
+// // // // // // // // // //           minX: lng,
+// // // // // // // // // //           minY: lat,
+// // // // // // // // // //           maxX: lng,
+// // // // // // // // // //           maxY: lat,
+// // // // // // // // // //         }) || [];
 
 // // // // // // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
-// // // // // // // // // //           if (!candidates.some((c: any) => c.featureIndex === index)) return false;
+// // // // // // // // // //           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
+// // // // // // // // // //           if (bf.geometry.type !== "Polygon" && bf.geometry.type !== "MultiPolygon") return false;
 // // // // // // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
-// // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>);
 // // // // // // // // // //         });
 
 // // // // // // // // // //         const pm25Feature = geoData.features.find((feature) => {
-// // // // // // // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(feature.geometry.coordinates);
-// // // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // // //           if (feature.geometry.type === "Polygon") {
+// // // // // // // // // //             return turf.booleanPointInPolygon(point, turf.polygon(feature.geometry.coordinates));
+// // // // // // // // // //           } else if (feature.geometry.type === "MultiPolygon") {
+// // // // // // // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(feature.geometry.coordinates));
+// // // // // // // // // //           }
+// // // // // // // // // //           return false;
 // // // // // // // // // //         });
-// // // // // // // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+// // // // // // // // // //         const pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // // // // // //           ? pm25Feature.properties.pm25_value
+// // // // // // // // // //           : null;
 
 // // // // // // // // // //         if (kelurahan?.properties) {
 // // // // // // // // // //           tooltipRef.current = L.tooltip({
@@ -267,7 +2383,7 @@
 // // // // // // // // // //       if (tooltipRef.current) tooltipRef.current.remove();
 // // // // // // // // // //       if (staticLayerRef.current) map.removeLayer(staticLayerRef.current);
 // // // // // // // // // //     };
-// // // // // // // // // //   }, [map, cachedGrid, selectedDate, inputRef]);
+// // // // // // // // // //   }, [map, cachedGrid, selectedDate, inputRef, geoData, boundaryData]);
 
 // // // // // // // // // //   return (
 // // // // // // // // // //     <>
@@ -283,7 +2399,7 @@
 // // // // // // // // // //           <div
 // // // // // // // // // //             className={styles.gradientBar}
 // // // // // // // // // //             style={{
-// // // // // // // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // // // // // // //               background: "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
 // // // // // // // // // //             }}
 // // // // // // // // // //           ></div>
 // // // // // // // // // //           <div className={styles.gradientLabels}>
@@ -313,37 +2429,7 @@
 // // // // // // // // // import * as turf from "@turf/turf";
 // // // // // // // // // import RBush from "rbush";
 // // // // // // // // // import styles from "./map.module.css";
-
-// // // // // // // // // interface FeatureProperties {
-// // // // // // // // //   pm25_value: number;
-// // // // // // // // // }
-
-// // // // // // // // // interface BoundaryProperties {
-// // // // // // // // //   NAMOBJ: string;
-// // // // // // // // // }
-
-// // // // // // // // // interface Feature {
-// // // // // // // // //   type: string;
-// // // // // // // // //   id: number;
-// // // // // // // // //   properties: FeatureProperties;
-// // // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
-// // // // // // // // // }
-
-// // // // // // // // // interface BoundaryFeature {
-// // // // // // // // //   type: string;
-// // // // // // // // //   properties: BoundaryProperties;
-// // // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
-// // // // // // // // // }
-
-// // // // // // // // // interface GeoJSONData {
-// // // // // // // // //   type: string;
-// // // // // // // // //   features: Feature[];
-// // // // // // // // // }
-
-// // // // // // // // // interface BoundaryGeoJSONData {
-// // // // // // // // //   type: string;
-// // // // // // // // //   features: BoundaryFeature[];
-// // // // // // // // // }
+// // // // // // // // // import { GeoJSONData, BoundaryGeoJSONData, InterpolatedFeature, RBushItem } from "./types";
 
 // // // // // // // // // interface HeatMapLayerProps {
 // // // // // // // // //   geoData: GeoJSONData | null;
@@ -353,31 +2439,15 @@
 // // // // // // // // //   inputRef: React.RefObject<HTMLInputElement>;
 // // // // // // // // // }
 
-// // // // // // // // // // Type for RBush spatial index items
-// // // // // // // // // interface RBushItem {
-// // // // // // // // //   minX: number;
-// // // // // // // // //   minY: number;
-// // // // // // // // //   maxX: number;
-// // // // // // // // //   maxY: number;
-// // // // // // // // //   featureIndex: number;
-// // // // // // // // // }
-
-// // // // // // // // // // Type for interpolated features
-// // // // // // // // // interface InterpolatedFeature {
-// // // // // // // // //   type: string;
-// // // // // // // // //   geometry: turf.Point;
-// // // // // // // // //   properties: { pm25: number };
-// // // // // // // // // }
-
 // // // // // // // // // const interpolateColor = (value: number): string => {
-// // // // // // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
-// // // // // // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
-// // // // // // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
-// // // // // // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
-// // // // // // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // // // // // //   if (value <= 50) return "rgba(0, 255, 0, 0.85)"; // Baik (Hijau)
+// // // // // // // // //   if (value <= 100) return "rgba(0, 0, 255, 0.85)"; // Sedang (Biru)
+// // // // // // // // //   if (value <= 199) return "rgba(255, 255, 0, 0.85)"; // Tidak Sehat (Kuning)
+// // // // // // // // //   if (value <= 299) return "rgba(255, 0, 0, 0.85)"; // Sangat Tidak Sehat (Merah)
+// // // // // // // // //   return "rgba(0, 0, 0, 0.85)"; // Berbahaya (Hitam)
 // // // // // // // // // };
 
-// // // // // // // // // const HeatMapLayer = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }: HeatMapLayerProps) => {
+// // // // // // // // // const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
 // // // // // // // // //   const map = useMap();
 // // // // // // // // //   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
 // // // // // // // // //   const tooltipRef = useRef<L.Tooltip | null>(null);
@@ -387,10 +2457,9 @@
 // // // // // // // // //   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
 
 // // // // // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
-// // // // // // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
-// // // // // // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
-// // // // // // // // //     // Warna teks hanya untuk nilai PM2.5, nama kelurahan tetap default (#374151 dari CSS)
-// // // // // // // // //     const textColor = pm25Color === "#00ff00" || pm25Color === "#ffff00" ? "#000000" : "#ffffff";
+// // // // // // // // //     const formattedPM25Value = pm25Value !== null && !isNaN(pm25Value) ? pm25Value.toFixed(2) : "N/A";
+// // // // // // // // //     const pm25Color = pm25Value !== null && !isNaN(pm25Value) ? interpolateColor(pm25Value) : "rgba(160, 174, 192, 0.85)";
+// // // // // // // // //     const textColor = pm25Color === "rgba(0, 255, 0, 0.85)" || pm25Color === "rgba(255, 255, 0, 0.85)" ? "#000000" : "#ffffff";
 // // // // // // // // //     return `
 // // // // // // // // //       <div class="${styles.customTooltip}">
 // // // // // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
@@ -405,17 +2474,24 @@
 
 // // // // // // // // //   const cachedBoundaries = useMemo(() => {
 // // // // // // // // //     if (!geoData) return turf.featureCollection([]);
-// // // // // // // // //     return turf.featureCollection(
-// // // // // // // // //       geoData.features
-// // // // // // // // //         .filter((f) => f.properties.pm25_value != null && f.properties.pm25_value >= 0)
-// // // // // // // // //         .map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" }))
-// // // // // // // // //     );
+// // // // // // // // //     const validFeatures = geoData.features
+// // // // // // // // //       .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
+// // // // // // // // //       .map((feature) => {
+// // // // // // // // //         const buffered = turf.buffer(feature.geometry, 0.002, { units: "degrees" });
+// // // // // // // // //         if (buffered && (buffered.geometry.type === "Polygon" || buffered.geometry.type === "MultiPolygon")) {
+// // // // // // // // //           return buffered as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+// // // // // // // // //         }
+// // // // // // // // //         return null;
+// // // // // // // // //       })
+// // // // // // // // //       .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => f != null);
+// // // // // // // // //     return turf.featureCollection(validFeatures);
 // // // // // // // // //   }, [geoData]);
 
 // // // // // // // // //   useEffect(() => {
 // // // // // // // // //     if (!boundaryData) return;
 // // // // // // // // //     const spatialIndex = new RBush<RBushItem>();
 // // // // // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // // // // // //       if (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon") return;
 // // // // // // // // //       const bbox = turf.bbox(feature.geometry);
 // // // // // // // // //       spatialIndex.insert({
 // // // // // // // // //         minX: bbox[0],
@@ -433,18 +2509,41 @@
 // // // // // // // // //   }, [boundaryData]);
 
 // // // // // // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // // // // // // //     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
+
+// // // // // // // // //     if (!boundaryData || !boundaryData.features) {
+// // // // // // // // //       console.warn("generateStaticGrid: boundaryData is null or has no features");
+// // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // //     }
+
+// // // // // // // // //     const validBoundaryFeatures = boundaryData.features.filter(
+// // // // // // // // //       (f): f is BoundaryFeature => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"
+// // // // // // // // //     );
+// // // // // // // // //     if (validBoundaryFeatures.length === 0) {
+// // // // // // // // //       console.warn("generateStaticGrid: No valid Polygon or MultiPolygon features in boundaryData");
+// // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // //     }
+
 // // // // // // // // //     const points = geoData.features
 // // // // // // // // //       .map((feature) => {
 // // // // // // // // //         const centroid = turf.centroid(feature.geometry);
 // // // // // // // // //         const pm25 = feature.properties.pm25_value;
-// // // // // // // // //         if (pm25 == null || pm25 < 0 || isNaN(pm25)) return null;
+// // // // // // // // //         if (pm25 == null || isNaN(pm25)) {
+// // // // // // // // //           console.log("Skipping feature due to invalid pm25_value:", feature);
+// // // // // // // // //           return null;
+// // // // // // // // //         }
 // // // // // // // // //         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
 // // // // // // // // //       })
 // // // // // // // // //       .filter((p): p is [number, number, number] => p !== null);
 
-// // // // // // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // // // // // //     console.log("generateStaticGrid: Valid points for interpolation:", points.length, points);
+
+// // // // // // // // //     const bbox = turf.bbox(turf.featureCollection(validBoundaryFeatures));
+// // // // // // // // //     console.log("generateStaticGrid: Bounding box:", bbox);
+
 // // // // // // // // //     const cellSize = 0.02;
 // // // // // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
+// // // // // // // // //     console.log("generateStaticGrid: Grid points created:", grid.features.length);
 
 // // // // // // // // //     let interpolated = turf.featureCollection([]);
 // // // // // // // // //     if (points.length > 0) {
@@ -454,15 +2553,20 @@
 // // // // // // // // //           cellSize / 4,
 // // // // // // // // //           { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 }
 // // // // // // // // //         );
+// // // // // // // // //         console.log("generateStaticGrid: Interpolated points:", interpolated.features.length);
 // // // // // // // // //       } catch (error) {
 // // // // // // // // //         console.error("Interpolation error:", error);
 // // // // // // // // //         return { imageUrl: null, bbox: [0, 0, 0, 0] };
 // // // // // // // // //       }
+// // // // // // // // //     } else {
+// // // // // // // // //       console.warn("generateStaticGrid: No valid points for interpolation");
+// // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
 // // // // // // // // //     }
 // // // // // // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
 
-// // // // // // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // // // // // //     const boundaryPolygon = turf.featureCollection(validBoundaryFeatures);
 // // // // // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
+// // // // // // // // //     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
 
 // // // // // // // // //     const canvas = document.createElement("canvas");
 // // // // // // // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
@@ -471,36 +2575,51 @@
 // // // // // // // // //     canvas.height = height;
 // // // // // // // // //     const ctx = canvas.getContext("2d");
 
-// // // // // // // // //     if (!ctx) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // //     if (!ctx) {
+// // // // // // // // //       console.error("generateStaticGrid: Failed to get canvas context");
+// // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // //     }
 
 // // // // // // // // //     ctx.fillStyle = "rgba(0, 0, 0, 0)";
 // // // // // // // // //     ctx.fillRect(0, 0, width, height);
 
+// // // // // // // // //     let validPoints = 0;
 // // // // // // // // //     clipped.features.forEach((feature) => {
 // // // // // // // // //       const coords = feature.geometry.coordinates;
-// // // // // // // // //       const point = turf.point(coords);
+// // // // // // // // //       if (!Array.isArray(coords) || coords.length !== 2 || typeof coords[0] !== "number" || typeof coords[1] !== "number") {
+// // // // // // // // //         console.warn("Invalid coordinates, skipping:", coords);
+// // // // // // // // //         return;
+// // // // // // // // //       }
 
-// // // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+// // // // // // // // //       const point = turf.point(coords as [number, number]);
+
+// // // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) =>
+// // // // // // // // //         turf.booleanPointInPolygon(point, buffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)
+// // // // // // // // //       );
 
 // // // // // // // // //       let pm25Value: number | null = null;
 // // // // // // // // //       if (inBuffer && interpolated.features.length > 0) {
 // // // // // // // // //         const closest = interpolated.features.reduce(
 // // // // // // // // //           (acc, f) => {
-// // // // // // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // // // // // //             if (f.geometry.type !== "Point" || !f.properties) return acc;
+// // // // // // // // //             const dist = turf.distance(f.geometry as GeoJSON.Point, coords as [number, number], { units: "degrees" });
 // // // // // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
 // // // // // // // // //           },
 // // // // // // // // //           { dist: Infinity, value: 0 }
 // // // // // // // // //         );
-// // // // // // // // //         pm25Value = closest.value;
+// // // // // // // // //         pm25Value = closest.value > 0 ? closest.value : null;
 // // // // // // // // //       } else {
 // // // // // // // // //         const pm25Feature = geoData.features.find((f) => {
-// // // // // // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
-// // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // //           if (f.geometry.type === "Polygon") {
+// // // // // // // // //             return turf.booleanPointInPolygon(point, turf.polygon(f.geometry.coordinates));
+// // // // // // // // //           } else if (f.geometry.type === "MultiPolygon") {
+// // // // // // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(f.geometry.coordinates));
+// // // // // // // // //           }
+// // // // // // // // //           return false;
 // // // // // // // // //         });
-// // // // // // // // //         pm25Value =
-// // // // // // // // //           pm25Feature && pm25Feature.properties.pm25_value != null && pm25Feature.properties.pm25_value >= 0
-// // // // // // // // //             ? pm25Feature.properties.pm25_value
-// // // // // // // // //             : null;
+// // // // // // // // //         pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // // // // //           ? pm25Feature.properties.pm25_value
+// // // // // // // // //           : null;
 // // // // // // // // //       }
 
 // // // // // // // // //       if (pm25Value == null) return;
@@ -510,22 +2629,30 @@
 // // // // // // // // //       const y = Math.round((bbox[3] - coords[1]) / cellSize);
 // // // // // // // // //       ctx.fillStyle = color;
 // // // // // // // // //       ctx.fillRect(x, y, 1, 1);
+// // // // // // // // //       validPoints++;
 // // // // // // // // //     });
+
+// // // // // // // // //     console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
 
 // // // // // // // // //     return { imageUrl: canvas.toDataURL(), bbox };
 // // // // // // // // //   };
 
 // // // // // // // // //   const cachedGrid = useMemo(() => {
-// // // // // // // // //     if (!geoData || !boundaryData) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // //     if (!geoData || !boundaryData) {
+// // // // // // // // //       console.warn("cachedGrid: Missing geoData or boundaryData");
+// // // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // // //     }
 // // // // // // // // //     return generateStaticGrid(geoData, boundaryData);
 // // // // // // // // //   }, [geoData, boundaryData]);
 
 // // // // // // // // //   useEffect(() => {
 // // // // // // // // //     if (!map || !geoData || !boundaryData) {
+// // // // // // // // //       console.warn("useEffect: Missing map, geoData, or boundaryData");
 // // // // // // // // //       return;
 // // // // // // // // //     }
 
 // // // // // // // // //     const { imageUrl, bbox } = cachedGrid;
+// // // // // // // // //     console.log("useEffect: Image URL and bbox:", imageUrl, bbox);
 
 // // // // // // // // //     if (staticLayerRef.current) {
 // // // // // // // // //       map.removeLayer(staticLayerRef.current);
@@ -536,16 +2663,19 @@
 // // // // // // // // //       tooltipRef.current = null;
 // // // // // // // // //     }
 
-// // // // // // // // //     if (imageUrl) {
-// // // // // // // // //       const bounds = [
-// // // // // // // // //         [bbox[1], bbox[0]],
-// // // // // // // // //         [bbox[3], bbox[2]],
+// // // // // // // // //     if (imageUrl && Array.isArray(bbox) && bbox.length === 4 && bbox.every((val) => typeof val === "number" && !isNaN(val))) {
+// // // // // // // // //       const bounds: L.LatLngBoundsExpression = [
+// // // // // // // // //         [bbox[1], bbox[0]], // [latMin, lngMin]
+// // // // // // // // //         [bbox[3], bbox[2]], // [latMax, lngMax]
 // // // // // // // // //       ];
 // // // // // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
+// // // // // // // // //       console.log("useEffect: ImageOverlay added to map");
+// // // // // // // // //     } else {
+// // // // // // // // //       console.warn("useEffect: Invalid imageUrl or bbox", { imageUrl, bbox });
 // // // // // // // // //     }
 
 // // // // // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
-// // // // // // // // //       if (document.activeElement === inputRef.current) {
+// // // // // // // // //       if (inputRef.current && document.activeElement === inputRef.current) {
 // // // // // // // // //         return;
 // // // // // // // // //       }
 // // // // // // // // //       const { lat, lng } = e.latlng;
@@ -569,15 +2699,22 @@
 
 // // // // // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
 // // // // // // // // //           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
+// // // // // // // // //           if (bf.geometry.type !== "Polygon" && bf.geometry.type !== "MultiPolygon") return false;
 // // // // // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
-// // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // //           return turf.booleanPointInPolygon(point, polygon as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>);
 // // // // // // // // //         });
 
 // // // // // // // // //         const pm25Feature = geoData.features.find((feature) => {
-// // // // // // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(feature.geometry.coordinates);
-// // // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // // //           if (feature.geometry.type === "Polygon") {
+// // // // // // // // //             return turf.booleanPointInPolygon(point, turf.polygon(feature.geometry.coordinates));
+// // // // // // // // //           } else if (feature.geometry.type === "MultiPolygon") {
+// // // // // // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(feature.geometry.coordinates));
+// // // // // // // // //           }
+// // // // // // // // //           return false;
 // // // // // // // // //         });
-// // // // // // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+// // // // // // // // //         const pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // // // // //           ? pm25Feature.properties.pm25_value
+// // // // // // // // //           : null;
 
 // // // // // // // // //         if (kelurahan?.properties) {
 // // // // // // // // //           tooltipRef.current = L.tooltip({
@@ -617,7 +2754,7 @@
 // // // // // // // // //           <div
 // // // // // // // // //             className={styles.gradientBar}
 // // // // // // // // //             style={{
-// // // // // // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // // // // // //               background: "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
 // // // // // // // // //             }}
 // // // // // // // // //           ></div>
 // // // // // // // // //           <div className={styles.gradientLabels}>
@@ -638,6 +2775,7 @@
 // // // // // // // // // };
 
 // // // // // // // // // export default HeatMapLayer;
+
 // // // // // // // // "use client";
 
 // // // // // // // // import { useEffect, useRef, useMemo } from "react";
@@ -646,38 +2784,7 @@
 // // // // // // // // import * as turf from "@turf/turf";
 // // // // // // // // import RBush from "rbush";
 // // // // // // // // import styles from "./map.module.css";
-// // // // // // // // import { GeoJSON as GeoJSONType } from "geojson";
-
-// // // // // // // // interface FeatureProperties {
-// // // // // // // //   pm25_value: number;
-// // // // // // // // }
-
-// // // // // // // // interface BoundaryProperties {
-// // // // // // // //   NAMOBJ: string;
-// // // // // // // // }
-
-// // // // // // // // interface Feature {
-// // // // // // // //   type: string;
-// // // // // // // //   id: number;
-// // // // // // // //   properties: FeatureProperties;
-// // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
-// // // // // // // // }
-
-// // // // // // // // interface BoundaryFeature {
-// // // // // // // //   type: string;
-// // // // // // // //   properties: BoundaryProperties;
-// // // // // // // //   geometry: turf.Polygon | turf.MultiPolygon;
-// // // // // // // // }
-
-// // // // // // // // interface GeoJSONData {
-// // // // // // // //   type: string;
-// // // // // // // //   features: Feature[];
-// // // // // // // // }
-
-// // // // // // // // interface BoundaryGeoJSONData {
-// // // // // // // //   type: string;
-// // // // // // // //   features: BoundaryFeature[];
-// // // // // // // // }
+// // // // // // // // import { GeoJSONData, BoundaryGeoJSONData, InterpolatedFeature, RBushItem, BoundaryFeature } from "./types";
 
 // // // // // // // // interface HeatMapLayerProps {
 // // // // // // // //   geoData: GeoJSONData | null;
@@ -687,26 +2794,12 @@
 // // // // // // // //   inputRef: React.RefObject<HTMLInputElement>;
 // // // // // // // // }
 
-// // // // // // // // interface RBushItem {
-// // // // // // // //   minX: number;
-// // // // // // // //   minY: number;
-// // // // // // // //   maxX: number;
-// // // // // // // //   maxY: number;
-// // // // // // // //   featureIndex: number;
-// // // // // // // // }
-
-// // // // // // // // interface InterpolatedFeature {
-// // // // // // // //   type: string;
-// // // // // // // //   geometry: turf.Point;
-// // // // // // // //   properties: { pm25: number };
-// // // // // // // // }
-
 // // // // // // // // const interpolateColor = (value: number): string => {
-// // // // // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
-// // // // // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
-// // // // // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
-// // // // // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
-// // // // // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // // // // //   if (value <= 50) return "rgba(0, 255, 0, 0.85)"; // Baik (Hijau)
+// // // // // // // //   if (value <= 100) return "rgba(0, 0, 255, 0.85)"; // Sedang (Biru)
+// // // // // // // //   if (value <= 199) return "rgba(255, 255, 0, 0.85)"; // Tidak Sehat (Kuning)
+// // // // // // // //   if (value <= 299) return "rgba(255, 0, 0, 0.85)"; // Sangat Tidak Sehat (Merah)
+// // // // // // // //   return "rgba(0, 0, 0, 0.85)"; // Berbahaya (Hitam)
 // // // // // // // // };
 
 // // // // // // // // const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
@@ -719,9 +2812,9 @@
 // // // // // // // //   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
 
 // // // // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
-// // // // // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
-// // // // // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
-// // // // // // // //     const textColor = pm25Color === "#00ff00" || pm25Color === "#ffff00" ? "#000000" : "#ffffff";
+// // // // // // // //     const formattedPM25Value = pm25Value !== null && !isNaN(pm25Value) ? pm25Value.toFixed(2) : "N/A";
+// // // // // // // //     const pm25Color = pm25Value !== null && !isNaN(pm25Value) ? interpolateColor(pm25Value) : "rgba(160, 174, 192, 0.85)";
+// // // // // // // //     const textColor = pm25Color === "rgba(0, 255, 0, 0.85)" || pm25Color === "rgba(255, 255, 0, 0.85)" ? "#000000" : "#ffffff";
 // // // // // // // //     return `
 // // // // // // // //       <div class="${styles.customTooltip}">
 // // // // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
@@ -736,17 +2829,24 @@
 
 // // // // // // // //   const cachedBoundaries = useMemo(() => {
 // // // // // // // //     if (!geoData) return turf.featureCollection([]);
-// // // // // // // //     return turf.featureCollection(
-// // // // // // // //       geoData.features
-// // // // // // // //         .filter((f) => f.properties.pm25_value != null && f.properties.pm25_value >= 0)
-// // // // // // // //         .map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" }))
-// // // // // // // //     );
+// // // // // // // //     const validFeatures = geoData.features
+// // // // // // // //       .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
+// // // // // // // //       .map((feature) => {
+// // // // // // // //         const buffered = turf.buffer(feature.geometry, 0.002, { units: "degrees" });
+// // // // // // // //         if (buffered && (buffered.geometry.type === "Polygon" || buffered.geometry.type === "MultiPolygon")) {
+// // // // // // // //           return buffered as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+// // // // // // // //         }
+// // // // // // // //         return null;
+// // // // // // // //       })
+// // // // // // // //       .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => f != null);
+// // // // // // // //     return turf.featureCollection(validFeatures);
 // // // // // // // //   }, [geoData]);
 
 // // // // // // // //   useEffect(() => {
 // // // // // // // //     if (!boundaryData) return;
 // // // // // // // //     const spatialIndex = new RBush<RBushItem>();
 // // // // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // // // // //       if (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon") return;
 // // // // // // // //       const bbox = turf.bbox(feature.geometry);
 // // // // // // // //       spatialIndex.insert({
 // // // // // // // //         minX: bbox[0],
@@ -764,18 +2864,41 @@
 // // // // // // // //   }, [boundaryData]);
 
 // // // // // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // // // // // //     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
+
+// // // // // // // //     if (!boundaryData || !boundaryData.features) {
+// // // // // // // //       console.warn("generateStaticGrid: boundaryData is null or has no features");
+// // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // //     }
+
+// // // // // // // //     const validBoundaryFeatures = boundaryData.features.filter(
+// // // // // // // //       (f): f is BoundaryFeature => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"
+// // // // // // // //     );
+// // // // // // // //     if (validBoundaryFeatures.length === 0) {
+// // // // // // // //       console.warn("generateStaticGrid: No valid Polygon or MultiPolygon features in boundaryData");
+// // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // //     }
+
 // // // // // // // //     const points = geoData.features
 // // // // // // // //       .map((feature) => {
 // // // // // // // //         const centroid = turf.centroid(feature.geometry);
 // // // // // // // //         const pm25 = feature.properties.pm25_value;
-// // // // // // // //         if (pm25 == null || pm25 < 0 || isNaN(pm25)) return null;
+// // // // // // // //         if (pm25 == null || isNaN(pm25)) {
+// // // // // // // //           console.log("Skipping feature due to invalid pm25_value:", feature);
+// // // // // // // //           return null;
+// // // // // // // //         }
 // // // // // // // //         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
 // // // // // // // //       })
 // // // // // // // //       .filter((p): p is [number, number, number] => p !== null);
 
-// // // // // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // // // // //     console.log("generateStaticGrid: Valid points for interpolation:", points.length, points);
+
+// // // // // // // //     const bbox = turf.bbox(turf.featureCollection(validBoundaryFeatures));
+// // // // // // // //     console.log("generateStaticGrid: Bounding box:", bbox);
+
 // // // // // // // //     const cellSize = 0.02;
 // // // // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
+// // // // // // // //     console.log("generateStaticGrid: Grid points created:", grid.features.length);
 
 // // // // // // // //     let interpolated = turf.featureCollection([]);
 // // // // // // // //     if (points.length > 0) {
@@ -785,15 +2908,27 @@
 // // // // // // // //           cellSize / 4,
 // // // // // // // //           { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 }
 // // // // // // // //         );
+// // // // // // // //         console.log("generateStaticGrid: Interpolated points:", interpolated.features.length);
 // // // // // // // //       } catch (error) {
 // // // // // // // //         console.error("Interpolation error:", error);
 // // // // // // // //         return { imageUrl: null, bbox: [0, 0, 0, 0] };
 // // // // // // // //       }
+// // // // // // // //     } else {
+// // // // // // // //       console.warn("generateStaticGrid: No valid points for interpolation");
+// // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
 // // // // // // // //     }
 // // // // // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
 
-// // // // // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // // // // //     // Perbaikan: Membuat FeatureCollection dengan tipe geometri yang benar
+// // // // // // // //     const boundaryPolygon = turf.featureCollection(
+// // // // // // // //       validBoundaryFeatures.map((feature) => ({
+// // // // // // // //         ...feature,
+// // // // // // // //         geometry: feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+// // // // // // // //       }))
+// // // // // // // //     ) as turf.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+
 // // // // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
+// // // // // // // //     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
 
 // // // // // // // //     const canvas = document.createElement("canvas");
 // // // // // // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
@@ -802,36 +2937,51 @@
 // // // // // // // //     canvas.height = height;
 // // // // // // // //     const ctx = canvas.getContext("2d");
 
-// // // // // // // //     if (!ctx) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // //     if (!ctx) {
+// // // // // // // //       console.error("generateStaticGrid: Failed to get canvas context");
+// // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // //     }
 
 // // // // // // // //     ctx.fillStyle = "rgba(0, 0, 0, 0)";
 // // // // // // // //     ctx.fillRect(0, 0, width, height);
 
+// // // // // // // //     let validPoints = 0;
 // // // // // // // //     clipped.features.forEach((feature) => {
 // // // // // // // //       const coords = feature.geometry.coordinates;
-// // // // // // // //       const point = turf.point(coords);
+// // // // // // // //       if (!Array.isArray(coords) || coords.length !== 2 || typeof coords[0] !== "number" || typeof coords[1] !== "number") {
+// // // // // // // //         console.warn("Invalid coordinates, skipping:", coords);
+// // // // // // // //         return;
+// // // // // // // //       }
 
-// // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+// // // // // // // //       const point = turf.point(coords as [number, number]);
+
+// // // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) =>
+// // // // // // // //         turf.booleanPointInPolygon(point, buffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)
+// // // // // // // //       );
 
 // // // // // // // //       let pm25Value: number | null = null;
 // // // // // // // //       if (inBuffer && interpolated.features.length > 0) {
 // // // // // // // //         const closest = interpolated.features.reduce(
 // // // // // // // //           (acc, f) => {
-// // // // // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // // // // //             if (f.geometry.type !== "Point" || !f.properties) return acc;
+// // // // // // // //             const dist = turf.distance(f.geometry as GeoJSON.Point, coords as [number, number], { units: "degrees" });
 // // // // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
 // // // // // // // //           },
 // // // // // // // //           { dist: Infinity, value: 0 }
 // // // // // // // //         );
-// // // // // // // //         pm25Value = closest.value;
+// // // // // // // //         pm25Value = closest.value > 0 ? closest.value : null;
 // // // // // // // //       } else {
 // // // // // // // //         const pm25Feature = geoData.features.find((f) => {
-// // // // // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
-// // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // //           if (f.geometry.type === "Polygon") {
+// // // // // // // //             return turf.booleanPointInPolygon(point, turf.polygon(f.geometry.coordinates));
+// // // // // // // //           } else if (f.geometry.type === "MultiPolygon") {
+// // // // // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(f.geometry.coordinates));
+// // // // // // // //           }
+// // // // // // // //           return false;
 // // // // // // // //         });
-// // // // // // // //         pm25Value =
-// // // // // // // //           pm25Feature && pm25Feature.properties.pm25_value != null && pm25Feature.properties.pm25_value >= 0
-// // // // // // // //             ? pm25Feature.properties.pm25_value
-// // // // // // // //             : null;
+// // // // // // // //         pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // // // //           ? pm25Feature.properties.pm25_value
+// // // // // // // //           : null;
 // // // // // // // //       }
 
 // // // // // // // //       if (pm25Value == null) return;
@@ -841,22 +2991,30 @@
 // // // // // // // //       const y = Math.round((bbox[3] - coords[1]) / cellSize);
 // // // // // // // //       ctx.fillStyle = color;
 // // // // // // // //       ctx.fillRect(x, y, 1, 1);
+// // // // // // // //       validPoints++;
 // // // // // // // //     });
+
+// // // // // // // //     console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
 
 // // // // // // // //     return { imageUrl: canvas.toDataURL(), bbox };
 // // // // // // // //   };
 
 // // // // // // // //   const cachedGrid = useMemo(() => {
-// // // // // // // //     if (!geoData || !boundaryData) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // //     if (!geoData || !boundaryData) {
+// // // // // // // //       console.warn("cachedGrid: Missing geoData or boundaryData");
+// // // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // // //     }
 // // // // // // // //     return generateStaticGrid(geoData, boundaryData);
 // // // // // // // //   }, [geoData, boundaryData]);
 
 // // // // // // // //   useEffect(() => {
 // // // // // // // //     if (!map || !geoData || !boundaryData) {
+// // // // // // // //       console.warn("useEffect: Missing map, geoData, or boundaryData");
 // // // // // // // //       return;
 // // // // // // // //     }
 
 // // // // // // // //     const { imageUrl, bbox } = cachedGrid;
+// // // // // // // //     console.log("useEffect: Image URL and bbox:", imageUrl, bbox);
 
 // // // // // // // //     if (staticLayerRef.current) {
 // // // // // // // //       map.removeLayer(staticLayerRef.current);
@@ -867,16 +3025,19 @@
 // // // // // // // //       tooltipRef.current = null;
 // // // // // // // //     }
 
-// // // // // // // //     if (imageUrl) {
-// // // // // // // //       const bounds = [
-// // // // // // // //         [bbox[1], bbox[0]],
-// // // // // // // //         [bbox[3], bbox[2]],
+// // // // // // // //     if (imageUrl && Array.isArray(bbox) && bbox.length === 4 && bbox.every((val) => typeof val === "number" && !isNaN(val))) {
+// // // // // // // //       const bounds: L.LatLngBoundsExpression = [
+// // // // // // // //         [bbox[1], bbox[0]], // [latMin, lngMin]
+// // // // // // // //         [bbox[3], bbox[2]], // [latMax, lngMax]
 // // // // // // // //       ];
 // // // // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
+// // // // // // // //       console.log("useEffect: ImageOverlay added to map");
+// // // // // // // //     } else {
+// // // // // // // //       console.warn("useEffect: Invalid imageUrl or bbox", { imageUrl, bbox });
 // // // // // // // //     }
 
 // // // // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
-// // // // // // // //       if (document.activeElement === inputRef.current) {
+// // // // // // // //       if (inputRef.current && document.activeElement === inputRef.current) {
 // // // // // // // //         return;
 // // // // // // // //       }
 // // // // // // // //       const { lat, lng } = e.latlng;
@@ -900,15 +3061,22 @@
 
 // // // // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
 // // // // // // // //           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
+// // // // // // // //           if (bf.geometry.type !== "Polygon" && bf.geometry.type !== "MultiPolygon") return false;
 // // // // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
-// // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // //           return turf.booleanPointInPolygon(point, polygon as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>);
 // // // // // // // //         });
 
 // // // // // // // //         const pm25Feature = geoData.features.find((feature) => {
-// // // // // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(feature.geometry.coordinates);
-// // // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // // //           if (feature.geometry.type === "Polygon") {
+// // // // // // // //             return turf.booleanPointInPolygon(point, turf.polygon(feature.geometry.coordinates));
+// // // // // // // //           } else if (feature.geometry.type === "MultiPolygon") {
+// // // // // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(feature.geometry.coordinates));
+// // // // // // // //           }
+// // // // // // // //           return false;
 // // // // // // // //         });
-// // // // // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+// // // // // // // //         const pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // // // //           ? pm25Feature.properties.pm25_value
+// // // // // // // //           : null;
 
 // // // // // // // //         if (kelurahan?.properties) {
 // // // // // // // //           tooltipRef.current = L.tooltip({
@@ -948,7 +3116,7 @@
 // // // // // // // //           <div
 // // // // // // // //             className={styles.gradientBar}
 // // // // // // // //             style={{
-// // // // // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // // // // //               background: "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
 // // // // // // // //             }}
 // // // // // // // //           ></div>
 // // // // // // // //           <div className={styles.gradientLabels}>
@@ -979,37 +3147,7 @@
 // // // // // // // import * as GeoJSON from "geojson";
 // // // // // // // import RBush from "rbush";
 // // // // // // // import styles from "./map.module.css";
-
-// // // // // // // interface FeatureProperties {
-// // // // // // //   pm25_value: number;
-// // // // // // // }
-
-// // // // // // // interface BoundaryProperties {
-// // // // // // //   NAMOBJ: string;
-// // // // // // // }
-
-// // // // // // // interface Feature {
-// // // // // // //   type: string;
-// // // // // // //   id: number;
-// // // // // // //   properties: FeatureProperties;
-// // // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
-// // // // // // // }
-
-// // // // // // // interface BoundaryFeature {
-// // // // // // //   type: string;
-// // // // // // //   properties: BoundaryProperties;
-// // // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
-// // // // // // // }
-
-// // // // // // // interface GeoJSONData {
-// // // // // // //   type: string;
-// // // // // // //   features: Feature[];
-// // // // // // // }
-
-// // // // // // // interface BoundaryGeoJSONData {
-// // // // // // //   type: string;
-// // // // // // //   features: BoundaryFeature[];
-// // // // // // // }
+// // // // // // // import { GeoJSONData, BoundaryGeoJSONData, InterpolatedFeature, RBushItem, BoundaryFeature } from "./types";
 
 // // // // // // // interface HeatMapLayerProps {
 // // // // // // //   geoData: GeoJSONData | null;
@@ -1019,26 +3157,12 @@
 // // // // // // //   inputRef: React.RefObject<HTMLInputElement>;
 // // // // // // // }
 
-// // // // // // // interface RBushItem {
-// // // // // // //   minX: number;
-// // // // // // //   minY: number;
-// // // // // // //   maxX: number;
-// // // // // // //   maxY: number;
-// // // // // // //   featureIndex: number;
-// // // // // // // }
-
-// // // // // // // interface InterpolatedFeature {
-// // // // // // //   type: string;
-// // // // // // //   geometry: turf.Point;
-// // // // // // //   properties: { pm25: number };
-// // // // // // // }
-
 // // // // // // // const interpolateColor = (value: number): string => {
-// // // // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
-// // // // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
-// // // // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
-// // // // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
-// // // // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // // // //   if (value <= 50) return "rgba(0, 255, 0, 0.85)"; // Baik (Hijau)
+// // // // // // //   if (value <= 100) return "rgba(0, 0, 255, 0.85)"; // Sedang (Biru)
+// // // // // // //   if (value <= 199) return "rgba(255, 255, 0, 0.85)"; // Tidak Sehat (Kuning)
+// // // // // // //   if (value <= 299) return "rgba(255, 0, 0, 0.85)"; // Sangat Tidak Sehat (Merah)
+// // // // // // //   return "rgba(0, 0, 0, 0.85)"; // Berbahaya (Hitam)
 // // // // // // // };
 
 // // // // // // // const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
@@ -1051,9 +3175,9 @@
 // // // // // // //   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
 
 // // // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
-// // // // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
-// // // // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
-// // // // // // //     const textColor = pm25Color === "#00ff00" || pm25Color === "#ffff00" ? "#000000" : "#ffffff";
+// // // // // // //     const formattedPM25Value = pm25Value !== null && !isNaN(pm25Value) ? pm25Value.toFixed(2) : "N/A";
+// // // // // // //     const pm25Color = pm25Value !== null && !isNaN(pm25Value) ? interpolateColor(pm25Value) : "rgba(160, 174, 192, 0.85)";
+// // // // // // //     const textColor = pm25Color === "rgba(0, 255, 0, 0.85)" || pm25Color === "rgba(255, 255, 0, 0.85)" ? "#000000" : "#ffffff";
 // // // // // // //     return `
 // // // // // // //       <div class="${styles.customTooltip}">
 // // // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
@@ -1067,18 +3191,25 @@
 // // // // // // //   };
 
 // // // // // // //   const cachedBoundaries = useMemo(() => {
-// // // // // // //     if (!geoData) return turf.featureCollection([]);
-// // // // // // //     return turf.featureCollection(
-// // // // // // //       geoData.features
-// // // // // // //         .filter((f) => f.properties.pm25_value != null && f.properties.pm25_value >= 0)
-// // // // // // //         .map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" }))
-// // // // // // //     );
+// // // // // // //     if (!geoData) return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>([]);
+// // // // // // //     const validFeatures = geoData.features
+// // // // // // //       .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
+// // // // // // //       .map((feature) => {
+// // // // // // //         const buffered = turf.buffer(feature.geometry, 0.002, { units: "degrees" });
+// // // // // // //         if (buffered && (buffered.geometry.type === "Polygon" || buffered.geometry.type === "MultiPolygon")) {
+// // // // // // //           return buffered as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+// // // // // // //         }
+// // // // // // //         return null;
+// // // // // // //       })
+// // // // // // //       .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => f != null);
+// // // // // // //     return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(validFeatures);
 // // // // // // //   }, [geoData]);
 
 // // // // // // //   useEffect(() => {
 // // // // // // //     if (!boundaryData) return;
 // // // // // // //     const spatialIndex = new RBush<RBushItem>();
 // // // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // // // //       if (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon") return;
 // // // // // // //       const bbox = turf.bbox(feature.geometry);
 // // // // // // //       spatialIndex.insert({
 // // // // // // //         minX: bbox[0],
@@ -1096,20 +3227,43 @@
 // // // // // // //   }, [boundaryData]);
 
 // // // // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // // // // //     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
+
+// // // // // // //     if (!boundaryData || !boundaryData.features) {
+// // // // // // //       console.warn("generateStaticGrid: boundaryData is null or has no features");
+// // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // //     }
+
+// // // // // // //     const validBoundaryFeatures = boundaryData.features.filter(
+// // // // // // //       (f): f is BoundaryFeature => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"
+// // // // // // //     );
+// // // // // // //     if (validBoundaryFeatures.length === 0) {
+// // // // // // //       console.warn("generateStaticGrid: No valid Polygon or MultiPolygon features in boundaryData");
+// // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // //     }
+
 // // // // // // //     const points = geoData.features
 // // // // // // //       .map((feature) => {
 // // // // // // //         const centroid = turf.centroid(feature.geometry);
 // // // // // // //         const pm25 = feature.properties.pm25_value;
-// // // // // // //         if (pm25 == null || pm25 < 0 || isNaN(pm25)) return null;
+// // // // // // //         if (pm25 == null || isNaN(pm25)) {
+// // // // // // //           console.log("Skipping feature due to invalid pm25_value:", feature);
+// // // // // // //           return null;
+// // // // // // //         }
 // // // // // // //         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
 // // // // // // //       })
 // // // // // // //       .filter((p): p is [number, number, number] => p !== null);
 
-// // // // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // // // //     console.log("generateStaticGrid: Valid points for interpolation:", points.length, points);
+
+// // // // // // //     const bbox = turf.bbox(turf.featureCollection(validBoundaryFeatures));
+// // // // // // //     console.log("generateStaticGrid: Bounding box:", bbox);
+
 // // // // // // //     const cellSize = 0.02;
 // // // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
+// // // // // // //     console.log("generateStaticGrid: Grid points created:", grid.features.length);
 
-// // // // // // //     let interpolated = turf.featureCollection([]);
+// // // // // // //     let interpolated = turf.featureCollection<GeoJSON.Point>([]);
 // // // // // // //     if (points.length > 0) {
 // // // // // // //       try {
 // // // // // // //         interpolated = turf.interpolate(
@@ -1117,15 +3271,26 @@
 // // // // // // //           cellSize / 4,
 // // // // // // //           { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 }
 // // // // // // //         );
+// // // // // // //         console.log("generateStaticGrid: Interpolated points:", interpolated.features.length);
 // // // // // // //       } catch (error) {
 // // // // // // //         console.error("Interpolation error:", error);
 // // // // // // //         return { imageUrl: null, bbox: [0, 0, 0, 0] };
 // // // // // // //       }
+// // // // // // //     } else {
+// // // // // // //       console.warn("generateStaticGrid: No valid points for interpolation");
+// // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
 // // // // // // //     }
 // // // // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
 
-// // // // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // // // //     const boundaryPolygon = turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(
+// // // // // // //       validBoundaryFeatures.map((feature) => ({
+// // // // // // //         ...feature,
+// // // // // // //         geometry: feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+// // // // // // //       }))
+// // // // // // //     );
+
 // // // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
+// // // // // // //     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
 
 // // // // // // //     const canvas = document.createElement("canvas");
 // // // // // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
@@ -1134,36 +3299,51 @@
 // // // // // // //     canvas.height = height;
 // // // // // // //     const ctx = canvas.getContext("2d");
 
-// // // // // // //     if (!ctx) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // //     if (!ctx) {
+// // // // // // //       console.error("generateStaticGrid: Failed to get canvas context");
+// // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // //     }
 
 // // // // // // //     ctx.fillStyle = "rgba(0, 0, 0, 0)";
 // // // // // // //     ctx.fillRect(0, 0, width, height);
 
+// // // // // // //     let validPoints = 0;
 // // // // // // //     clipped.features.forEach((feature) => {
 // // // // // // //       const coords = feature.geometry.coordinates;
-// // // // // // //       const point = turf.point(coords);
+// // // // // // //       if (!Array.isArray(coords) || coords.length !== 2 || typeof coords[0] !== "number" || typeof coords[1] !== "number") {
+// // // // // // //         console.warn("Invalid coordinates, skipping:", coords);
+// // // // // // //         return;
+// // // // // // //       }
 
-// // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+// // // // // // //       const point = turf.point(coords as [number, number]);
+
+// // // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) =>
+// // // // // // //         turf.booleanPointInPolygon(point, buffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)
+// // // // // // //       );
 
 // // // // // // //       let pm25Value: number | null = null;
 // // // // // // //       if (inBuffer && interpolated.features.length > 0) {
 // // // // // // //         const closest = interpolated.features.reduce(
 // // // // // // //           (acc, f) => {
-// // // // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // // // //             if (f.geometry.type !== "Point" || !f.properties) return acc;
+// // // // // // //             const dist = turf.distance(f.geometry as GeoJSON.Point, coords as [number, number], { units: "degrees" });
 // // // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
 // // // // // // //           },
 // // // // // // //           { dist: Infinity, value: 0 }
 // // // // // // //         );
-// // // // // // //         pm25Value = closest.value;
+// // // // // // //         pm25Value = closest.value > 0 ? closest.value : null;
 // // // // // // //       } else {
 // // // // // // //         const pm25Feature = geoData.features.find((f) => {
-// // // // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
-// // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // //           if (f.geometry.type === "Polygon") {
+// // // // // // //             return turf.booleanPointInPolygon(point, turf.polygon(f.geometry.coordinates));
+// // // // // // //           } else if (f.geometry.type === "MultiPolygon") {
+// // // // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(f.geometry.coordinates));
+// // // // // // //           }
+// // // // // // //           return false;
 // // // // // // //         });
-// // // // // // //         pm25Value =
-// // // // // // //           pm25Feature && pm25Feature.properties.pm25_value != null && pm25Feature.properties.pm25_value >= 0
-// // // // // // //             ? pm25Feature.properties.pm25_value
-// // // // // // //             : null;
+// // // // // // //         pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // // //           ? pm25Feature.properties.pm25_value
+// // // // // // //           : null;
 // // // // // // //       }
 
 // // // // // // //       if (pm25Value == null) return;
@@ -1173,22 +3353,30 @@
 // // // // // // //       const y = Math.round((bbox[3] - coords[1]) / cellSize);
 // // // // // // //       ctx.fillStyle = color;
 // // // // // // //       ctx.fillRect(x, y, 1, 1);
+// // // // // // //       validPoints++;
 // // // // // // //     });
+
+// // // // // // //     console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
 
 // // // // // // //     return { imageUrl: canvas.toDataURL(), bbox };
 // // // // // // //   };
 
 // // // // // // //   const cachedGrid = useMemo(() => {
-// // // // // // //     if (!geoData || !boundaryData) return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // //     if (!geoData || !boundaryData) {
+// // // // // // //       console.warn("cachedGrid: Missing geoData or boundaryData");
+// // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // // //     }
 // // // // // // //     return generateStaticGrid(geoData, boundaryData);
 // // // // // // //   }, [geoData, boundaryData]);
 
 // // // // // // //   useEffect(() => {
 // // // // // // //     if (!map || !geoData || !boundaryData) {
+// // // // // // //       console.warn("useEffect: Missing map, geoData, or boundaryData");
 // // // // // // //       return;
 // // // // // // //     }
 
 // // // // // // //     const { imageUrl, bbox } = cachedGrid;
+// // // // // // //     console.log("useEffect: Image URL and bbox:", imageUrl, bbox);
 
 // // // // // // //     if (staticLayerRef.current) {
 // // // // // // //       map.removeLayer(staticLayerRef.current);
@@ -1199,16 +3387,19 @@
 // // // // // // //       tooltipRef.current = null;
 // // // // // // //     }
 
-// // // // // // //     if (imageUrl) {
-// // // // // // //       const bounds = [
-// // // // // // //         [bbox[1], bbox[0]],
-// // // // // // //         [bbox[3], bbox[2]],
+// // // // // // //     if (imageUrl && Array.isArray(bbox) && bbox.length === 4 && bbox.every((val) => typeof val === "number" && !isNaN(val))) {
+// // // // // // //       const bounds: L.LatLngBoundsExpression = [
+// // // // // // //         [bbox[1], bbox[0]], // [latMin, lngMin]
+// // // // // // //         [bbox[3], bbox[2]], // [latMax, lngMax]
 // // // // // // //       ];
 // // // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
+// // // // // // //       console.log("useEffect: ImageOverlay added to map");
+// // // // // // //     } else {
+// // // // // // //       console.warn("useEffect: Invalid imageUrl or bbox", { imageUrl, bbox });
 // // // // // // //     }
 
 // // // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
-// // // // // // //       if (document.activeElement === inputRef.current) {
+// // // // // // //       if (inputRef.current && document.activeElement === inputRef.current) {
 // // // // // // //         return;
 // // // // // // //       }
 // // // // // // //       const { lat, lng } = e.latlng;
@@ -1232,15 +3423,22 @@
 
 // // // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
 // // // // // // //           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
+// // // // // // //           if (bf.geometry.type !== "Polygon" && bf.geometry.type !== "MultiPolygon") return false;
 // // // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
-// // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // //           return turf.booleanPointInPolygon(point, polygon as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>);
 // // // // // // //         });
 
 // // // // // // //         const pm25Feature = geoData.features.find((feature) => {
-// // // // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(feature.geometry.coordinates);
-// // // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // // //           if (feature.geometry.type === "Polygon") {
+// // // // // // //             return turf.booleanPointInPolygon(point, turf.polygon(feature.geometry.coordinates));
+// // // // // // //           } else if (feature.geometry.type === "MultiPolygon") {
+// // // // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(feature.geometry.coordinates));
+// // // // // // //           }
+// // // // // // //           return false;
 // // // // // // //         });
-// // // // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+// // // // // // //         const pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // // //           ? pm25Feature.properties.pm25_value
+// // // // // // //           : null;
 
 // // // // // // //         if (kelurahan?.properties) {
 // // // // // // //           tooltipRef.current = L.tooltip({
@@ -1280,7 +3478,7 @@
 // // // // // // //           <div
 // // // // // // //             className={styles.gradientBar}
 // // // // // // //             style={{
-// // // // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // // // //               background: "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
 // // // // // // //             }}
 // // // // // // //           ></div>
 // // // // // // //           <div className={styles.gradientLabels}>
@@ -1311,37 +3509,7 @@
 // // // // // // import * as GeoJSON from "geojson";
 // // // // // // import RBush from "rbush";
 // // // // // // import styles from "./map.module.css";
-
-// // // // // // interface FeatureProperties {
-// // // // // //   pm25_value: number;
-// // // // // // }
-
-// // // // // // interface BoundaryProperties {
-// // // // // //   NAMOBJ: string;
-// // // // // // }
-
-// // // // // // interface Feature {
-// // // // // //   type: string;
-// // // // // //   id: number;
-// // // // // //   properties: FeatureProperties;
-// // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
-// // // // // // }
-
-// // // // // // interface BoundaryFeature {
-// // // // // //   type: string;
-// // // // // //   properties: BoundaryProperties;
-// // // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
-// // // // // // }
-
-// // // // // // interface GeoJSONData {
-// // // // // //   type: string;
-// // // // // //   features: Feature[];
-// // // // // // }
-
-// // // // // // interface BoundaryGeoJSONData {
-// // // // // //   type: string;
-// // // // // //   features: BoundaryFeature[];
-// // // // // // }
+// // // // // // import { GeoJSONData, BoundaryGeoJSONData, InterpolatedFeature, RBushItem, BoundaryFeature } from "./types";
 
 // // // // // // interface HeatMapLayerProps {
 // // // // // //   geoData: GeoJSONData | null;
@@ -1351,26 +3519,12 @@
 // // // // // //   inputRef: React.RefObject<HTMLInputElement>;
 // // // // // // }
 
-// // // // // // interface RBushItem {
-// // // // // //   minX: number;
-// // // // // //   minY: number;
-// // // // // //   maxX: number;
-// // // // // //   maxY: number;
-// // // // // //   featureIndex: number;
-// // // // // // }
-
-// // // // // // interface InterpolatedFeature {
-// // // // // //   type: string;
-// // // // // //   geometry: GeoJSON.Point;
-// // // // // //   properties: { pm25: number };
-// // // // // // }
-
 // // // // // // const interpolateColor = (value: number): string => {
-// // // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
-// // // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
-// // // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
-// // // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
-// // // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // // //   if (value <= 50) return "rgba(0, 255, 0, 0.85)"; // Baik (Hijau)
+// // // // // //   if (value <= 100) return "rgba(0, 0, 255, 0.85)"; // Sedang (Biru)
+// // // // // //   if (value <= 199) return "rgba(255, 255, 0, 0.85)"; // Tidak Sehat (Kuning)
+// // // // // //   if (value <= 299) return "rgba(255, 0, 0, 0.85)"; // Sangat Tidak Sehat (Merah)
+// // // // // //   return "rgba(0, 0, 0, 0.85)"; // Berbahaya (Hitam)
 // // // // // // };
 
 // // // // // // const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
@@ -1383,9 +3537,9 @@
 // // // // // //   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
 
 // // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
-// // // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
-// // // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
-// // // // // //     const textColor = pm25Color === "#00ff00" || pm25Color === "#ffff00" ? "#000000" : "#ffffff";
+// // // // // //     const formattedPM25Value = pm25Value !== null && !isNaN(pm25Value) ? pm25Value.toFixed(2) : "N/A";
+// // // // // //     const pm25Color = pm25Value !== null && !isNaN(pm25Value) ? interpolateColor(pm25Value) : "rgba(160, 174, 192, 0.85)";
+// // // // // //     const textColor = pm25Color === "rgba(0, 255, 0, 0.85)" || pm25Color === "rgba(255, 255, 0, 0.85)" ? "#000000" : "#ffffff";
 // // // // // //     return `
 // // // // // //       <div class="${styles.customTooltip}">
 // // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
@@ -1399,18 +3553,25 @@
 // // // // // //   };
 
 // // // // // //   const cachedBoundaries = useMemo(() => {
-// // // // // //     if (!geoData) return turf.featureCollection([]);
-// // // // // //     return turf.featureCollection(
-// // // // // //       geoData.features
-// // // // // //         .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
-// // // // // //         .map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" }))
-// // // // // //     );
+// // // // // //     if (!geoData) return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>([]);
+// // // // // //     const validFeatures = geoData.features
+// // // // // //       .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
+// // // // // //       .map((feature) => {
+// // // // // //         const buffered = turf.buffer(feature.geometry, 0.002, { units: "degrees" });
+// // // // // //         if (buffered && (buffered.geometry.type === "Polygon" || buffered.geometry.type === "MultiPolygon")) {
+// // // // // //           return buffered as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+// // // // // //         }
+// // // // // //         return null;
+// // // // // //       })
+// // // // // //       .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => f != null);
+// // // // // //     return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(validFeatures);
 // // // // // //   }, [geoData]);
 
 // // // // // //   useEffect(() => {
 // // // // // //     if (!boundaryData) return;
 // // // // // //     const spatialIndex = new RBush<RBushItem>();
 // // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // // //       if (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon") return;
 // // // // // //       const bbox = turf.bbox(feature.geometry);
 // // // // // //       spatialIndex.insert({
 // // // // // //         minX: bbox[0],
@@ -1429,7 +3590,20 @@
 
 // // // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
 // // // // // //     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
-    
+
+// // // // // //     if (!boundaryData || !boundaryData.features) {
+// // // // // //       console.warn("generateStaticGrid: boundaryData is null or has no features");
+// // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // //     }
+
+// // // // // //     const validBoundaryFeatures = boundaryData.features.filter(
+// // // // // //       (f): f is BoundaryFeature => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"
+// // // // // //     );
+// // // // // //     if (validBoundaryFeatures.length === 0) {
+// // // // // //       console.warn("generateStaticGrid: No valid Polygon or MultiPolygon features in boundaryData");
+// // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // // //     }
+
 // // // // // //     const points = geoData.features
 // // // // // //       .map((feature) => {
 // // // // // //         const centroid = turf.centroid(feature.geometry);
@@ -1444,14 +3618,14 @@
 
 // // // // // //     console.log("generateStaticGrid: Valid points for interpolation:", points.length, points);
 
-// // // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // // //     const bbox = turf.bbox(turf.featureCollection(validBoundaryFeatures));
 // // // // // //     console.log("generateStaticGrid: Bounding box:", bbox);
 
 // // // // // //     const cellSize = 0.02;
 // // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
 // // // // // //     console.log("generateStaticGrid: Grid points created:", grid.features.length);
 
-// // // // // //     let interpolated = turf.featureCollection([]);
+// // // // // //     let interpolated = turf.featureCollection<GeoJSON.Point>([]);
 // // // // // //     if (points.length > 0) {
 // // // // // //       try {
 // // // // // //         interpolated = turf.interpolate(
@@ -1470,7 +3644,13 @@
 // // // // // //     }
 // // // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
 
-// // // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // // //     const boundaryPolygon = turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(
+// // // // // //       validBoundaryFeatures.map((feature) => ({
+// // // // // //         ...feature,
+// // // // // //         geometry: feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+// // // // // //       }))
+// // // // // //     );
+
 // // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
 // // // // // //     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
 
@@ -1492,29 +3672,40 @@
 // // // // // //     let validPoints = 0;
 // // // // // //     clipped.features.forEach((feature) => {
 // // // // // //       const coords = feature.geometry.coordinates;
-// // // // // //       const point = turf.point(coords);
+// // // // // //       if (!Array.isArray(coords) || coords.length !== 2 || typeof coords[0] !== "number" || typeof coords[1] !== "number") {
+// // // // // //         console.warn("Invalid coordinates, skipping:", coords);
+// // // // // //         return;
+// // // // // //       }
 
-// // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+// // // // // //       const point = turf.point(coords as [number, number]);
+
+// // // // // //       const inBuffer = cachedBoundaries.features.some((buffer) =>
+// // // // // //         turf.booleanPointInPolygon(point, buffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)
+// // // // // //       );
 
 // // // // // //       let pm25Value: number | null = null;
 // // // // // //       if (inBuffer && interpolated.features.length > 0) {
 // // // // // //         const closest = interpolated.features.reduce(
 // // // // // //           (acc, f) => {
-// // // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // // //             if (f.geometry.type !== "Point" || !f.properties) return acc;
+// // // // // //             const dist = turf.distance(f.geometry as GeoJSON.Point, coords as [number, number], { units: "degrees" });
 // // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
 // // // // // //           },
 // // // // // //           { dist: Infinity, value: 0 }
 // // // // // //         );
-// // // // // //         pm25Value = closest.value;
+// // // // // //         pm25Value = closest.value > 0 ? closest.value : null;
 // // // // // //       } else {
 // // // // // //         const pm25Feature = geoData.features.find((f) => {
-// // // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
-// // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // //           if (f.geometry.type === "Polygon") {
+// // // // // //             return turf.booleanPointInPolygon(point, turf.polygon(f.geometry.coordinates));
+// // // // // //           } else if (f.geometry.type === "MultiPolygon") {
+// // // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(f.geometry.coordinates));
+// // // // // //           }
+// // // // // //           return false;
 // // // // // //         });
-// // // // // //         pm25Value =
-// // // // // //           pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
-// // // // // //             ? pm25Feature.properties.pm25_value
-// // // // // //             : null;
+// // // // // //         pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // //           ? pm25Feature.properties.pm25_value
+// // // // // //           : null;
 // // // // // //       }
 
 // // // // // //       if (pm25Value == null) return;
@@ -1538,7 +3729,7 @@
 // // // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
 // // // // // //     }
 // // // // // //     return generateStaticGrid(geoData, boundaryData);
-// // // // // //   }, [geoData, boundaryData]);
+// // // // // //   }, [geoData, boundaryData, generateStaticGrid]);
 
 // // // // // //   useEffect(() => {
 // // // // // //     if (!map || !geoData || !boundaryData) {
@@ -1558,19 +3749,19 @@
 // // // // // //       tooltipRef.current = null;
 // // // // // //     }
 
-// // // // // //     if (imageUrl) {
-// // // // // //       const bounds = [
-// // // // // //         [bbox[1], bbox[0]],
-// // // // // //         [bbox[3], bbox[2]],
+// // // // // //     if (imageUrl && Array.isArray(bbox) && bbox.length === 4 && bbox.every((val) => typeof val === "number" && !isNaN(val))) {
+// // // // // //       const bounds: L.LatLngBoundsExpression = [
+// // // // // //         [bbox[1], bbox[0]], // [latMin, lngMin]
+// // // // // //         [bbox[3], bbox[2]], // [latMax, lngMax]
 // // // // // //       ];
 // // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
 // // // // // //       console.log("useEffect: ImageOverlay added to map");
 // // // // // //     } else {
-// // // // // //       console.warn("useEffect: No valid imageUrl for ImageOverlay");
+// // // // // //       console.warn("useEffect: Invalid imageUrl or bbox", { imageUrl, bbox });
 // // // // // //     }
 
 // // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
-// // // // // //       if (document.activeElement === inputRef.current) {
+// // // // // //       if (inputRef.current && document.activeElement === inputRef.current) {
 // // // // // //         return;
 // // // // // //       }
 // // // // // //       const { lat, lng } = e.latlng;
@@ -1594,15 +3785,22 @@
 
 // // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
 // // // // // //           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
+// // // // // //           if (bf.geometry.type !== "Polygon" && bf.geometry.type !== "MultiPolygon") return false;
 // // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
-// // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // //           return turf.booleanPointInPolygon(point, polygon as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>);
 // // // // // //         });
 
 // // // // // //         const pm25Feature = geoData.features.find((feature) => {
-// // // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(feature.geometry.coordinates);
-// // // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // // //           if (feature.geometry.type === "Polygon") {
+// // // // // //             return turf.booleanPointInPolygon(point, turf.polygon(feature.geometry.coordinates));
+// // // // // //           } else if (feature.geometry.type === "MultiPolygon") {
+// // // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(feature.geometry.coordinates));
+// // // // // //           }
+// // // // // //           return false;
 // // // // // //         });
-// // // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+// // // // // //         const pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // // //           ? pm25Feature.properties.pm25_value
+// // // // // //           : null;
 
 // // // // // //         if (kelurahan?.properties) {
 // // // // // //           tooltipRef.current = L.tooltip({
@@ -1642,7 +3840,7 @@
 // // // // // //           <div
 // // // // // //             className={styles.gradientBar}
 // // // // // //             style={{
-// // // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // // //               background: "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
 // // // // // //             }}
 // // // // // //           ></div>
 // // // // // //           <div className={styles.gradientLabels}>
@@ -1666,44 +3864,14 @@
 
 // // // // // "use client";
 
-// // // // // import { useEffect, useRef, useMemo } from "react";
+// // // // // import { useEffect, useRef, useMemo, useCallback } from "react";
 // // // // // import { useMap } from "react-leaflet";
 // // // // // import L from "leaflet";
 // // // // // import * as turf from "@turf/turf";
 // // // // // import * as GeoJSON from "geojson";
 // // // // // import RBush from "rbush";
 // // // // // import styles from "./map.module.css";
-
-// // // // // interface FeatureProperties {
-// // // // //   pm25_value: number;
-// // // // // }
-
-// // // // // interface BoundaryProperties {
-// // // // //   NAMOBJ: string;
-// // // // // }
-
-// // // // // interface Feature {
-// // // // //   type: string;
-// // // // //   id: number;
-// // // // //   properties: FeatureProperties;
-// // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
-// // // // // }
-
-// // // // // interface BoundaryFeature {
-// // // // //   type: string;
-// // // // //   properties: BoundaryProperties;
-// // // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
-// // // // // }
-
-// // // // // interface GeoJSONData {
-// // // // //   type: string;
-// // // // //   features: Feature[];
-// // // // // }
-
-// // // // // interface BoundaryGeoJSONData {
-// // // // //   type: string;
-// // // // //   features: BoundaryFeature[];
-// // // // // }
+// // // // // import { GeoJSONData, BoundaryGeoJSONData, InterpolatedFeature, RBushItem, BoundaryFeature } from "./types";
 
 // // // // // interface HeatMapLayerProps {
 // // // // //   geoData: GeoJSONData | null;
@@ -1713,26 +3881,12 @@
 // // // // //   inputRef: React.RefObject<HTMLInputElement>;
 // // // // // }
 
-// // // // // interface RBushItem {
-// // // // //   minX: number;
-// // // // //   minY: number;
-// // // // //   maxX: number;
-// // // // //   maxY: number;
-// // // // //   featureIndex: number;
-// // // // // }
-
-// // // // // interface InterpolatedFeature {
-// // // // //   type: string;
-// // // // //   geometry: GeoJSON.Point;
-// // // // //   properties: { pm25: number };
-// // // // // }
-
 // // // // // const interpolateColor = (value: number): string => {
-// // // // //   if (value <= 50) return "#00ff00"; // Baik (Hijau)
-// // // // //   if (value <= 100) return "#0000ff"; // Sedang (Biru)
-// // // // //   if (value <= 199) return "#ffff00"; // Tidak Sehat (Kuning)
-// // // // //   if (value <= 299) return "#ff0000"; // Sangat Tidak Sehat (Merah)
-// // // // //   return "#000000"; // Berbahaya (Hitam)
+// // // // //   if (value <= 50) return "rgba(0, 255, 0, 0.85)"; // Baik (Hijau)
+// // // // //   if (value <= 100) return "rgba(0, 0, 255, 0.85)"; // Sedang (Biru)
+// // // // //   if (value <= 199) return "rgba(255, 255, 0, 0.85)"; // Tidak Sehat (Kuning)
+// // // // //   if (value <= 299) return "rgba(255, 0, 0, 0.85)"; // Sangat Tidak Sehat (Merah)
+// // // // //   return "rgba(0, 0, 0, 0.85)"; // Berbahaya (Hitam)
 // // // // // };
 
 // // // // // const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
@@ -1740,14 +3894,14 @@
 // // // // //   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
 // // // // //   const tooltipRef = useRef<L.Tooltip | null>(null);
 // // // // //   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-// // // // //   const lastPosition = useRef<{ lat: number; lng: number } | null> (null);
+// // // // //   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
 // // // // //   const interpolatedDataRef = useRef<InterpolatedFeature[]>([]);
 // // // // //   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
 
 // // // // //   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
-// // // // //     const formattedPM25Value = pm25Value !== null ? pm25Value.toFixed(2) : "N/A";
-// // // // //     const pm25Color = pm25Value !== null ? interpolateColor(pm25Value) : "#a0aec0";
-// // // // //     const textColor = pm25Color === "#00ff00" || pm25Color === "#ffff00" ? "#000000" : "#ffffff";
+// // // // //     const formattedPM25Value = pm25Value !== null && !isNaN(pm25Value) ? pm25Value.toFixed(2) : "N/A";
+// // // // //     const pm25Color = pm25Value !== null && !isNaN(pm25Value) ? interpolateColor(pm25Value) : "rgba(160, 174, 192, 0.85)";
+// // // // //     const textColor = pm25Color === "rgba(0, 255, 0, 0.85)" || pm25Color === "rgba(255, 255, 0, 0.85)" ? "#000000" : "#ffffff";
 // // // // //     return `
 // // // // //       <div class="${styles.customTooltip}">
 // // // // //         <div class="${styles.kelurahanName}">${kelurahanName}</div>
@@ -1761,18 +3915,25 @@
 // // // // //   };
 
 // // // // //   const cachedBoundaries = useMemo(() => {
-// // // // //     if (!geoData) return turf.featureCollection([]);
+// // // // //     if (!geoData) return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>([]);
 // // // // //     const validFeatures = geoData.features
 // // // // //       .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
-// // // // //       .map((feature) => turf.buffer(feature.geometry, 0.002, { units: "degrees" }))
-// // // // //       .filter((f): f is turf.Feature<turf.Polygon | turf.MultiPolygon> => f != null);
-// // // // //     return turf.featureCollection(validFeatures);
+// // // // //       .map((feature) => {
+// // // // //         const buffered = turf.buffer(feature.geometry, 0.002, { units: "degrees" });
+// // // // //         if (buffered && (buffered.geometry.type === "Polygon" || buffered.geometry.type === "MultiPolygon")) {
+// // // // //           return buffered as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+// // // // //         }
+// // // // //         return null;
+// // // // //       })
+// // // // //       .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => f != null);
+// // // // //     return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(validFeatures);
 // // // // //   }, [geoData]);
 
 // // // // //   useEffect(() => {
 // // // // //     if (!boundaryData) return;
 // // // // //     const spatialIndex = new RBush<RBushItem>();
 // // // // //     boundaryData.features.forEach((feature, index) => {
+// // // // //       if (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon") return;
 // // // // //       const bbox = turf.bbox(feature.geometry);
 // // // // //       spatialIndex.insert({
 // // // // //         minX: bbox[0],
@@ -1789,9 +3950,22 @@
 // // // // //     };
 // // // // //   }, [boundaryData]);
 
-// // // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // // //   const generateStaticGrid = useCallback((geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
 // // // // //     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
-    
+
+// // // // //     if (!boundaryData || !boundaryData.features) {
+// // // // //       console.warn("generateStaticGrid: boundaryData is null or has no features");
+// // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // //     }
+
+// // // // //     const validBoundaryFeatures = boundaryData.features.filter(
+// // // // //       (f): f is BoundaryFeature => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"
+// // // // //     );
+// // // // //     if (validBoundaryFeatures.length === 0) {
+// // // // //       console.warn("generateStaticGrid: No valid Polygon or MultiPolygon features in boundaryData");
+// // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // // //     }
+
 // // // // //     const points = geoData.features
 // // // // //       .map((feature) => {
 // // // // //         const centroid = turf.centroid(feature.geometry);
@@ -1806,14 +3980,14 @@
 
 // // // // //     console.log("generateStaticGrid: Valid points for interpolation:", points.length, points);
 
-// // // // //     const bbox = turf.bbox(turf.featureCollection(boundaryData.features));
+// // // // //     const bbox = turf.bbox(turf.featureCollection(validBoundaryFeatures));
 // // // // //     console.log("generateStaticGrid: Bounding box:", bbox);
 
 // // // // //     const cellSize = 0.02;
 // // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
 // // // // //     console.log("generateStaticGrid: Grid points created:", grid.features.length);
 
-// // // // //     let interpolated = turf.featureCollection([]);
+// // // // //     let interpolated = turf.featureCollection<GeoJSON.Point>([]);
 // // // // //     if (points.length > 0) {
 // // // // //       try {
 // // // // //         interpolated = turf.interpolate(
@@ -1832,7 +4006,13 @@
 // // // // //     }
 // // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
 
-// // // // //     const boundaryPolygon = turf.featureCollection(boundaryData.features);
+// // // // //     const boundaryPolygon = turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(
+// // // // //       validBoundaryFeatures.map((feature) => ({
+// // // // //         ...feature,
+// // // // //         geometry: feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+// // // // //       }))
+// // // // //     );
+
 // // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
 // // // // //     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
 
@@ -1854,29 +4034,40 @@
 // // // // //     let validPoints = 0;
 // // // // //     clipped.features.forEach((feature) => {
 // // // // //       const coords = feature.geometry.coordinates;
-// // // // //       const point = turf.point(coords);
+// // // // //       if (!Array.isArray(coords) || coords.length !== 2 || typeof coords[0] !== "number" || typeof coords[1] !== "number") {
+// // // // //         console.warn("Invalid coordinates, skipping:", coords);
+// // // // //         return;
+// // // // //       }
 
-// // // // //       const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer));
+// // // // //       const point = turf.point(coords as [number, number]);
+
+// // // // //       const inBuffer = cachedBoundaries.features.some((buffer) =>
+// // // // //         turf.booleanPointInPolygon(point, buffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)
+// // // // //       );
 
 // // // // //       let pm25Value: number | null = null;
 // // // // //       if (inBuffer && interpolated.features.length > 0) {
 // // // // //         const closest = interpolated.features.reduce(
 // // // // //           (acc, f) => {
-// // // // //             const dist = turf.distance(f.geometry.coordinates, coords, { units: "degrees" });
+// // // // //             if (f.geometry.type !== "Point" || !f.properties) return acc;
+// // // // //             const dist = turf.distance(f.geometry as GeoJSON.Point, coords as [number, number], { units: "degrees" });
 // // // // //             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
 // // // // //           },
 // // // // //           { dist: Infinity, value: 0 }
 // // // // //         );
-// // // // //         pm25Value = closest.value;
+// // // // //         pm25Value = closest.value > 0 ? closest.value : null;
 // // // // //       } else {
 // // // // //         const pm25Feature = geoData.features.find((f) => {
-// // // // //           const polygon = f.geometry.type === "Polygon" ? turf.polygon(f.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
-// // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // //           if (f.geometry.type === "Polygon") {
+// // // // //             return turf.booleanPointInPolygon(point, turf.polygon(f.geometry.coordinates));
+// // // // //           } else if (f.geometry.type === "MultiPolygon") {
+// // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(f.geometry.coordinates));
+// // // // //           }
+// // // // //           return false;
 // // // // //         });
-// // // // //         pm25Value =
-// // // // //           pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
-// // // // //             ? pm25Feature.properties.pm25_value
-// // // // //             : null;
+// // // // //         pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // //           ? pm25Feature.properties.pm25_value
+// // // // //           : null;
 // // // // //       }
 
 // // // // //       if (pm25Value == null) return;
@@ -1892,7 +4083,7 @@
 // // // // //     console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
 
 // // // // //     return { imageUrl: canvas.toDataURL(), bbox };
-// // // // //   };
+// // // // //   }, []); // Tidak ada dependensi eksternal
 
 // // // // //   const cachedGrid = useMemo(() => {
 // // // // //     if (!geoData || !boundaryData) {
@@ -1920,19 +4111,19 @@
 // // // // //       tooltipRef.current = null;
 // // // // //     }
 
-// // // // //     if (imageUrl) {
-// // // // //       const bounds = [
-// // // // //         [bbox[1], bbox[0]],
-// // // // //         [bbox[3], bbox[2]],
+// // // // //     if (imageUrl && Array.isArray(bbox) && bbox.length === 4 && bbox.every((val) => typeof val === "number" && !isNaN(val))) {
+// // // // //       const bounds: L.LatLngBoundsExpression = [
+// // // // //         [bbox[1], bbox[0]], // [latMin, lngMin]
+// // // // //         [bbox[3], bbox[2]], // [latMax, lngMax]
 // // // // //       ];
 // // // // //       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
 // // // // //       console.log("useEffect: ImageOverlay added to map");
 // // // // //     } else {
-// // // // //       console.warn("useEffect: No valid imageUrl for ImageOverlay");
+// // // // //       console.warn("useEffect: Invalid imageUrl or bbox", { imageUrl, bbox });
 // // // // //     }
 
 // // // // //     const handleMouseMove = (e: L.LeafletMouseEvent) => {
-// // // // //       if (document.activeElement === inputRef.current) {
+// // // // //       if (inputRef.current && document.activeElement === inputRef.current) {
 // // // // //         return;
 // // // // //       }
 // // // // //       const { lat, lng } = e.latlng;
@@ -1956,15 +4147,22 @@
 
 // // // // //         const kelurahan = boundaryData.features.find((bf, index) => {
 // // // // //           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
+// // // // //           if (bf.geometry.type !== "Polygon" && bf.geometry.type !== "MultiPolygon") return false;
 // // // // //           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
-// // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // //           return turf.booleanPointInPolygon(point, polygon as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>);
 // // // // //         });
 
 // // // // //         const pm25Feature = geoData.features.find((feature) => {
-// // // // //           const polygon = feature.geometry.type === "Polygon" ? turf.polygon(feature.geometry.coordinates) : turf.multiPolygon(f.geometry.coordinates);
-// // // // //           return turf.booleanPointInPolygon(point, polygon);
+// // // // //           if (feature.geometry.type === "Polygon") {
+// // // // //             return turf.booleanPointInPolygon(point, turf.polygon(feature.geometry.coordinates));
+// // // // //           } else if (feature.geometry.type === "MultiPolygon") {
+// // // // //             return turf.booleanPointInPolygon(point, turf.multiPolygon(feature.geometry.coordinates));
+// // // // //           }
+// // // // //           return false;
 // // // // //         });
-// // // // //         const pm25Value = pm25Feature ? pm25Feature.properties.pm25_value : null;
+// // // // //         const pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // // // //           ? pm25Feature.properties.pm25_value
+// // // // //           : null;
 
 // // // // //         if (kelurahan?.properties) {
 // // // // //           tooltipRef.current = L.tooltip({
@@ -2004,7 +4202,7 @@
 // // // // //           <div
 // // // // //             className={styles.gradientBar}
 // // // // //             style={{
-// // // // //               background: "linear-gradient(to right, #00ff00, #0000ff, #ffff00, #ff0000, #000000)",
+// // // // //               background: "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
 // // // // //             }}
 // // // // //           ></div>
 // // // // //           <div className={styles.gradientLabels}>
@@ -2028,40 +4226,14 @@
 
 // // // // "use client";
 
-// // // // import { useEffect, useRef, useMemo } from "react";
+// // // // import { useEffect, useRef, useMemo, useCallback } from "react";
 // // // // import { useMap } from "react-leaflet";
 // // // // import L from "leaflet";
 // // // // import * as turf from "@turf/turf";
 // // // // import * as GeoJSON from "geojson";
 // // // // import RBush from "rbush";
 // // // // import styles from "./map.module.css";
-
-// // // // interface FeatureProperties {
-// // // //   pm25_value: number | null; // Tambahkan null untuk data kosong
-// // // // }
-
-// // // // interface BoundaryProperties {
-// // // //   NAMOBJ: string;
-// // // // }
-
-// // // // interface Feature extends GeoJSON.Feature {
-// // // //   id?: number; // id bersifat opsional
-// // // //   properties: FeatureProperties;
-// // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
-// // // // }
-
-// // // // interface BoundaryFeature extends GeoJSON.Feature {
-// // // //   properties: BoundaryProperties;
-// // // //   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
-// // // // }
-
-// // // // interface GeoJSONData extends GeoJSON.FeatureCollection {
-// // // //   features: Feature[];
-// // // // }
-
-// // // // interface BoundaryGeoJSONData extends GeoJSON.FeatureCollection {
-// // // //   features: BoundaryFeature[];
-// // // // }
+// // // // import { GeoJSONData, BoundaryGeoJSONData, InterpolatedFeature, RBushItem, BoundaryFeature } from "./types";
 
 // // // // interface HeatMapLayerProps {
 // // // //   geoData: GeoJSONData | null;
@@ -2069,19 +4241,6 @@
 // // // //   selectedDate: string;
 // // // //   isLoading: boolean;
 // // // //   inputRef: React.RefObject<HTMLInputElement>;
-// // // // }
-
-// // // // interface RBushItem {
-// // // //   minX: number;
-// // // //   minY: number;
-// // // //   maxX: number;
-// // // //   maxY: number;
-// // // //   featureIndex: number;
-// // // // }
-
-// // // // interface InterpolatedFeature extends GeoJSON.Feature {
-// // // //   geometry: GeoJSON.Point;
-// // // //   properties: { pm25: number };
 // // // // }
 
 // // // // const interpolateColor = (value: number): string => {
@@ -2118,7 +4277,7 @@
 // // // //   };
 
 // // // //   const cachedBoundaries = useMemo(() => {
-// // // //     if (!geoData) return turf.featureCollection([]);
+// // // //     if (!geoData) return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>([]);
 // // // //     const validFeatures = geoData.features
 // // // //       .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
 // // // //       .map((feature) => {
@@ -2129,7 +4288,7 @@
 // // // //         return null;
 // // // //       })
 // // // //       .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => f != null);
-// // // //     return turf.featureCollection(validFeatures);
+// // // //     return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(validFeatures);
 // // // //   }, [geoData]);
 
 // // // //   useEffect(() => {
@@ -2153,7 +4312,7 @@
 // // // //     };
 // // // //   }, [boundaryData]);
 
-// // // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // // //   const generateStaticGrid = useCallback((geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
 // // // //     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
 
 // // // //     if (!boundaryData || !boundaryData.features) {
@@ -2190,7 +4349,7 @@
 // // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
 // // // //     console.log("generateStaticGrid: Grid points created:", grid.features.length);
 
-// // // //     let interpolated = turf.featureCollection([]);
+// // // //     let interpolated = turf.featureCollection<GeoJSON.Point>([]);
 // // // //     if (points.length > 0) {
 // // // //       try {
 // // // //         interpolated = turf.interpolate(
@@ -2209,9 +4368,20 @@
 // // // //     }
 // // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
 
-// // // //     const boundaryPolygon = turf.featureCollection(validBoundaryFeatures);
+// // // //     const boundaryPolygon = turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(
+// // // //       validBoundaryFeatures.map((feature) => ({
+// // // //         ...feature,
+// // // //         geometry: feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+// // // //       }))
+// // // //     );
+
 // // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
 // // // //     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
+
+// // // //     // Pastikan kode ini hanya dijalankan di sisi klien
+// // // //     if (typeof window === "undefined") {
+// // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // // //     }
 
 // // // //     const canvas = document.createElement("canvas");
 // // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
@@ -2280,7 +4450,7 @@
 // // // //     console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
 
 // // // //     return { imageUrl: canvas.toDataURL(), bbox };
-// // // //   };
+// // // //   }, [cachedBoundaries.features]); // Tambahkan cachedBoundaries.features sebagai dependensi
 
 // // // //   const cachedGrid = useMemo(() => {
 // // // //     if (!geoData || !boundaryData) {
@@ -2288,7 +4458,7 @@
 // // // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
 // // // //     }
 // // // //     return generateStaticGrid(geoData, boundaryData);
-// // // //   }, [geoData, boundaryData]);
+// // // //   }, [geoData, boundaryData]); // generateStaticGrid tidak perlu disertakan karena sudah stabil dengan useCallback
 
 // // // //   useEffect(() => {
 // // // //     if (!map || !geoData || !boundaryData) {
@@ -2423,20 +4593,21 @@
 
 // // // "use client";
 
-// // // import { useEffect, useRef, useMemo } from "react";
+// // // import { useEffect, useRef, useMemo, useCallback } from "react";
 // // // import { useMap } from "react-leaflet";
 // // // import L from "leaflet";
 // // // import * as turf from "@turf/turf";
+// // // import * as GeoJSON from "geojson";
 // // // import RBush from "rbush";
 // // // import styles from "./map.module.css";
-// // // import { GeoJSONData, BoundaryGeoJSONData, InterpolatedFeature, RBushItem } from "./types";
+// // // import { GeoJSONData, BoundaryGeoJSONData, InterpolatedFeature, RBushItem, BoundaryFeature } from "./types";
 
 // // // interface HeatMapLayerProps {
 // // //   geoData: GeoJSONData | null;
 // // //   boundaryData: BoundaryGeoJSONData | null;
 // // //   selectedDate: string;
 // // //   isLoading: boolean;
-// // //   inputRef: React.RefObject<HTMLInputElement>;
+// // //   inputRef: React.RefObject<HTMLInputElement | null>; // Perbaiki tipe untuk menerima null
 // // // }
 
 // // // const interpolateColor = (value: number): string => {
@@ -2473,7 +4644,7 @@
 // // //   };
 
 // // //   const cachedBoundaries = useMemo(() => {
-// // //     if (!geoData) return turf.featureCollection([]);
+// // //     if (!geoData) return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>([]);
 // // //     const validFeatures = geoData.features
 // // //       .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
 // // //       .map((feature) => {
@@ -2484,7 +4655,7 @@
 // // //         return null;
 // // //       })
 // // //       .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => f != null);
-// // //     return turf.featureCollection(validFeatures);
+// // //     return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(validFeatures);
 // // //   }, [geoData]);
 
 // // //   useEffect(() => {
@@ -2508,7 +4679,7 @@
 // // //     };
 // // //   }, [boundaryData]);
 
-// // //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// // //   const generateStaticGrid = useCallback((geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
 // // //     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
 
 // // //     if (!boundaryData || !boundaryData.features) {
@@ -2545,7 +4716,7 @@
 // // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
 // // //     console.log("generateStaticGrid: Grid points created:", grid.features.length);
 
-// // //     let interpolated = turf.featureCollection([]);
+// // //     let interpolated = turf.featureCollection<GeoJSON.Point>([]);
 // // //     if (points.length > 0) {
 // // //       try {
 // // //         interpolated = turf.interpolate(
@@ -2564,9 +4735,20 @@
 // // //     }
 // // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
 
-// // //     const boundaryPolygon = turf.featureCollection(validBoundaryFeatures);
+// // //     const boundaryPolygon = turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(
+// // //       validBoundaryFeatures.map((feature) => ({
+// // //         ...feature,
+// // //         geometry: feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+// // //       }))
+// // //     );
+
 // // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
 // // //     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
+
+// // //     // Pastikan kode ini hanya dijalankan di sisi klien
+// // //     if (typeof window === "undefined") {
+// // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// // //     }
 
 // // //     const canvas = document.createElement("canvas");
 // // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
@@ -2617,9 +4799,10 @@
 // // //           }
 // // //           return false;
 // // //         });
-// // //         pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
-// // //           ? pm25Feature.properties.pm25_value
-// // //           : null;
+// // //         pm25Value =
+// // //           pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // //             ? pm25Feature.properties.pm25_value
+// // //             : null;
 // // //       }
 
 // // //       if (pm25Value == null) return;
@@ -2635,7 +4818,7 @@
 // // //     console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
 
 // // //     return { imageUrl: canvas.toDataURL(), bbox };
-// // //   };
+// // //   }, [cachedBoundaries.features]);
 
 // // //   const cachedGrid = useMemo(() => {
 // // //     if (!geoData || !boundaryData) {
@@ -2712,9 +4895,10 @@
 // // //           }
 // // //           return false;
 // // //         });
-// // //         const pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
-// // //           ? pm25Feature.properties.pm25_value
-// // //           : null;
+// // //         const pm25Value =
+// // //           pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// // //             ? pm25Feature.properties.pm25_value
+// // //             : null;
 
 // // //         if (kelurahan?.properties) {
 // // //           tooltipRef.current = L.tooltip({
@@ -2754,7 +4938,8 @@
 // // //           <div
 // // //             className={styles.gradientBar}
 // // //             style={{
-// // //               background: "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
+// // //               background:
+// // //                 "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
 // // //             }}
 // // //           ></div>
 // // //           <div className={styles.gradientLabels}>
@@ -2778,10 +4963,11 @@
 
 // // "use client";
 
-// // import { useEffect, useRef, useMemo } from "react";
+// // import { useEffect, useRef, useMemo, useCallback } from "react";
 // // import { useMap } from "react-leaflet";
 // // import L from "leaflet";
 // // import * as turf from "@turf/turf";
+// // import * as GeoJSON from "geojson";
 // // import RBush from "rbush";
 // // import styles from "./map.module.css";
 // // import { GeoJSONData, BoundaryGeoJSONData, InterpolatedFeature, RBushItem, BoundaryFeature } from "./types";
@@ -2791,7 +4977,7 @@
 // //   boundaryData: BoundaryGeoJSONData | null;
 // //   selectedDate: string;
 // //   isLoading: boolean;
-// //   inputRef: React.RefObject<HTMLInputElement>;
+// //   inputRef: React.RefObject<HTMLInputElement | null>;
 // // }
 
 // // const interpolateColor = (value: number): string => {
@@ -2828,7 +5014,7 @@
 // //   };
 
 // //   const cachedBoundaries = useMemo(() => {
-// //     if (!geoData) return turf.featureCollection([]);
+// //     if (!geoData) return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>([]);
 // //     const validFeatures = geoData.features
 // //       .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
 // //       .map((feature) => {
@@ -2839,7 +5025,7 @@
 // //         return null;
 // //       })
 // //       .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => f != null);
-// //     return turf.featureCollection(validFeatures);
+// //     return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(validFeatures);
 // //   }, [geoData]);
 
 // //   useEffect(() => {
@@ -2863,7 +5049,7 @@
 // //     };
 // //   }, [boundaryData]);
 
-// //   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+// //   const generateStaticGrid = useCallback((geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
 // //     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
 
 // //     if (!boundaryData || !boundaryData.features) {
@@ -2900,7 +5086,7 @@
 // //     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
 // //     console.log("generateStaticGrid: Grid points created:", grid.features.length);
 
-// //     let interpolated = turf.featureCollection([]);
+// //     let interpolated = turf.featureCollection<GeoJSON.Point>([]);
 // //     if (points.length > 0) {
 // //       try {
 // //         interpolated = turf.interpolate(
@@ -2919,16 +5105,19 @@
 // //     }
 // //     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
 
-// //     // Perbaikan: Membuat FeatureCollection dengan tipe geometri yang benar
-// //     const boundaryPolygon = turf.featureCollection(
+// //     const boundaryPolygon = turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(
 // //       validBoundaryFeatures.map((feature) => ({
 // //         ...feature,
 // //         geometry: feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
 // //       }))
-// //     ) as turf.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+// //     );
 
 // //     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
 // //     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
+
+// //     if (typeof window === "undefined") {
+// //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
+// //     }
 
 // //     const canvas = document.createElement("canvas");
 // //     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
@@ -2979,9 +5168,10 @@
 // //           }
 // //           return false;
 // //         });
-// //         pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
-// //           ? pm25Feature.properties.pm25_value
-// //           : null;
+// //         pm25Value =
+// //           pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// //             ? pm25Feature.properties.pm25_value
+// //             : null;
 // //       }
 
 // //       if (pm25Value == null) return;
@@ -2997,7 +5187,7 @@
 // //     console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
 
 // //     return { imageUrl: canvas.toDataURL(), bbox };
-// //   };
+// //   }, [cachedBoundaries.features]);
 
 // //   const cachedGrid = useMemo(() => {
 // //     if (!geoData || !boundaryData) {
@@ -3005,7 +5195,7 @@
 // //       return { imageUrl: null, bbox: [0, 0, 0, 0] };
 // //     }
 // //     return generateStaticGrid(geoData, boundaryData);
-// //   }, [geoData, boundaryData]);
+// //   }, [geoData, boundaryData, generateStaticGrid]); // Tambahkan generateStaticGrid ke dependensi
 
 // //   useEffect(() => {
 // //     if (!map || !geoData || !boundaryData) {
@@ -3074,9 +5264,10 @@
 // //           }
 // //           return false;
 // //         });
-// //         const pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
-// //           ? pm25Feature.properties.pm25_value
-// //           : null;
+// //         const pm25Value =
+// //           pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
+// //             ? pm25Feature.properties.pm25_value
+// //             : null;
 
 // //         if (kelurahan?.properties) {
 // //           tooltipRef.current = L.tooltip({
@@ -3116,7 +5307,8 @@
 // //           <div
 // //             className={styles.gradientBar}
 // //             style={{
-// //               background: "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
+// //               background:
+// //                 "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
 // //             }}
 // //           ></div>
 // //           <div className={styles.gradientLabels}>
@@ -3140,392 +5332,166 @@
 
 // "use client";
 
-// import { useEffect, useRef, useMemo } from "react";
+// import React, { useEffect, useRef } from "react";
 // import { useMap } from "react-leaflet";
 // import L from "leaflet";
-// import * as turf from "@turf/turf";
-// import * as GeoJSON from "geojson";
-// import RBush from "rbush";
-// import styles from "./map.module.css";
-// import { GeoJSONData, BoundaryGeoJSONData, InterpolatedFeature, RBushItem, BoundaryFeature } from "./types";
+// import { GeoJSONData, BoundaryGeoJSONData } from "./types";
+// import { interpolateColor } from "../utils/color";
 
 // interface HeatMapLayerProps {
 //   geoData: GeoJSONData | null;
 //   boundaryData: BoundaryGeoJSONData | null;
 //   selectedDate: string;
 //   isLoading: boolean;
-//   inputRef: React.RefObject<HTMLInputElement>;
+//   inputRef: React.RefObject<HTMLInputElement | null>;
 // }
 
-// const interpolateColor = (value: number): string => {
-//   if (value <= 50) return "rgba(0, 255, 0, 0.85)"; // Baik (Hijau)
-//   if (value <= 100) return "rgba(0, 0, 255, 0.85)"; // Sedang (Biru)
-//   if (value <= 199) return "rgba(255, 255, 0, 0.85)"; // Tidak Sehat (Kuning)
-//   if (value <= 299) return "rgba(255, 0, 0, 0.85)"; // Sangat Tidak Sehat (Merah)
-//   return "rgba(0, 0, 0, 0.85)"; // Berbahaya (Hitam)
+// const generateStaticGrid = (map: L.Map, boundaryData: BoundaryGeoJSONData, geoData: GeoJSONData): { imageUrl: string; bounds: L.LatLngBounds } | null => {
+//   if (typeof window === "undefined") return null;
+
+//   console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
+
+//   const bounds = map.getBounds();
+//   const topLeft = bounds.getNorthWest();
+//   const bottomRight = bounds.getSouthEast();
+//   const gridSize = 0.001; // Ukuran grid dalam derajat
+
+//   // Buat canvas dengan ukuran lebih besar
+//   const canvasWidth = 512; // Tingkatkan ukuran canvas
+//   const canvasHeight = 512;
+//   const canvas = document.createElement("canvas");
+//   canvas.width = canvasWidth;
+//   canvas.height = canvasHeight;
+//   const ctx = canvas.getContext("2d");
+
+//   if (!ctx) {
+//     console.error("generateStaticGrid: Failed to get 2D context");
+//     return null;
+//   }
+
+//   // Hitung skala untuk memetakan koordinat geografis ke piksel canvas
+//   const latRange = topLeft.lat - bottomRight.lat;
+//   const lngRange = bottomRight.lng - topLeft.lng;
+//   const pixelPerLat = canvasHeight / latRange;
+//   const pixelPerLng = canvasWidth / lngRange;
+
+//   // Bersihkan canvas
+//   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+//   // Gambar grid
+//   for (let lat = bottomRight.lat; lat < topLeft.lat; lat += gridSize) {
+//     for (let lng = topLeft.lng; lng < bottomRight.lng; lng += gridSize) {
+//       const point = L.latLng(lat + gridSize / 2, lng + gridSize / 2);
+//       let pm25Value = 0;
+
+//       // Cari nilai pm25_value untuk titik ini
+//       geoData.features.forEach((feature) => {
+//         const polygon = L.geoJSON(feature.geometry);
+//         if (polygon.getBounds().contains(point)) {
+//           pm25Value = feature.properties.pm25_value || 0;
+//         }
+//       });
+
+//       // Hitung posisi piksel di canvas
+//       const x = ((lng - topLeft.lng) * pixelPerLng) | 0;
+//       const y = ((topLeft.lat - lat) * pixelPerLat) | 0;
+//       const color = interpolateColor(pm25Value / 100); // Normalisasi nilai untuk warna
+//       ctx.fillStyle = color;
+//       ctx.fillRect(x, y, Math.ceil(gridSize * pixelPerLng), Math.ceil(gridSize * pixelPerLat));
+//     }
+//   }
+
+//   console.log("generateStaticGrid: Canvas drawn, bounds:", [topLeft.lng, bottomRight.lat, bottomRight.lng, topLeft.lat]);
+
+//   return {
+//     imageUrl: canvas.toDataURL("image/png"),
+//     bounds: L.latLngBounds([bottomRight.lat, topLeft.lng], [topLeft.lat, bottomRight.lng]),
+//   };
 // };
 
-// const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
+// const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, isLoading, inputRef }) => {
 //   const map = useMap();
-//   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
-//   const tooltipRef = useRef<L.Tooltip | null>(null);
-//   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-//   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
-//   const interpolatedDataRef = useRef<InterpolatedFeature[]>([]);
-//   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
-
-//   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
-//     const formattedPM25Value = pm25Value !== null && !isNaN(pm25Value) ? pm25Value.toFixed(2) : "N/A";
-//     const pm25Color = pm25Value !== null && !isNaN(pm25Value) ? interpolateColor(pm25Value) : "rgba(160, 174, 192, 0.85)";
-//     const textColor = pm25Color === "rgba(0, 255, 0, 0.85)" || pm25Color === "rgba(255, 255, 0, 0.85)" ? "#000000" : "#ffffff";
-//     return `
-//       <div class="${styles.customTooltip}">
-//         <div class="${styles.kelurahanName}">${kelurahanName}</div>
-//         <div class="${styles.aodContainer}">
-//           <div class="${styles.aodCircle}" style="background-color: ${pm25Color}; color: ${textColor}">
-//             ${formattedPM25Value}
-//           </div>
-//         </div>
-//       </div>
-//     `;
-//   };
-
-//   const cachedBoundaries = useMemo(() => {
-//     if (!geoData) return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>([]);
-//     const validFeatures = geoData.features
-//       .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
-//       .map((feature) => {
-//         const buffered = turf.buffer(feature.geometry, 0.002, { units: "degrees" });
-//         if (buffered && (buffered.geometry.type === "Polygon" || buffered.geometry.type === "MultiPolygon")) {
-//           return buffered as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
-//         }
-//         return null;
-//       })
-//       .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => f != null);
-//     return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(validFeatures);
-//   }, [geoData]);
+//   const overlayRef = useRef<L.ImageOverlay | null>(null);
 
 //   useEffect(() => {
-//     if (!boundaryData) return;
-//     const spatialIndex = new RBush<RBushItem>();
-//     boundaryData.features.forEach((feature, index) => {
-//       if (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon") return;
-//       const bbox = turf.bbox(feature.geometry);
-//       spatialIndex.insert({
-//         minX: bbox[0],
-//         minY: bbox[1],
-//         maxX: bbox[2],
-//         maxY: bbox[3],
-//         featureIndex: index,
+//     if (typeof window === "undefined" || isLoading || !geoData || !boundaryData) {
+//       console.log("HeatMapLayer: Skipped rendering due to:", {
+//         isWindowUndefined: typeof window === "undefined",
+//         isLoading,
+//         hasGeoData: !!geoData,
+//         hasBoundaryData: !!boundaryData,
 //       });
-//     });
-//     spatialIndexRef.current = spatialIndex;
-
-//     return () => {
-//       spatialIndexRef.current = null;
-//     };
-//   }, [boundaryData]);
-
-//   const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
-//     console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
-
-//     if (!boundaryData || !boundaryData.features) {
-//       console.warn("generateStaticGrid: boundaryData is null or has no features");
-//       return { imageUrl: null, bbox: [0, 0, 0, 0] };
-//     }
-
-//     const validBoundaryFeatures = boundaryData.features.filter(
-//       (f): f is BoundaryFeature => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"
-//     );
-//     if (validBoundaryFeatures.length === 0) {
-//       console.warn("generateStaticGrid: No valid Polygon or MultiPolygon features in boundaryData");
-//       return { imageUrl: null, bbox: [0, 0, 0, 0] };
-//     }
-
-//     const points = geoData.features
-//       .map((feature) => {
-//         const centroid = turf.centroid(feature.geometry);
-//         const pm25 = feature.properties.pm25_value;
-//         if (pm25 == null || isNaN(pm25)) {
-//           console.log("Skipping feature due to invalid pm25_value:", feature);
-//           return null;
-//         }
-//         return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
-//       })
-//       .filter((p): p is [number, number, number] => p !== null);
-
-//     console.log("generateStaticGrid: Valid points for interpolation:", points.length, points);
-
-//     const bbox = turf.bbox(turf.featureCollection(validBoundaryFeatures));
-//     console.log("generateStaticGrid: Bounding box:", bbox);
-
-//     const cellSize = 0.02;
-//     const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
-//     console.log("generateStaticGrid: Grid points created:", grid.features.length);
-
-//     let interpolated = turf.featureCollection<GeoJSON.Point>([]);
-//     if (points.length > 0) {
-//       try {
-//         interpolated = turf.interpolate(
-//           turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { pm25: p[2] }))),
-//           cellSize / 4,
-//           { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 }
-//         );
-//         console.log("generateStaticGrid: Interpolated points:", interpolated.features.length);
-//       } catch (error) {
-//         console.error("Interpolation error:", error);
-//         return { imageUrl: null, bbox: [0, 0, 0, 0] };
-//       }
-//     } else {
-//       console.warn("generateStaticGrid: No valid points for interpolation");
-//       return { imageUrl: null, bbox: [0, 0, 0, 0] };
-//     }
-//     interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
-
-//     const boundaryPolygon = turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(
-//       validBoundaryFeatures.map((feature) => ({
-//         ...feature,
-//         geometry: feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
-//       }))
-//     );
-
-//     const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
-//     console.log("generateStaticGrid: Clipped points:", clipped.features.length);
-
-//     const canvas = document.createElement("canvas");
-//     const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
-//     const height = Math.ceil((bbox[3] - bbox[1]) / cellSize);
-//     canvas.width = width;
-//     canvas.height = height;
-//     const ctx = canvas.getContext("2d");
-
-//     if (!ctx) {
-//       console.error("generateStaticGrid: Failed to get canvas context");
-//       return { imageUrl: null, bbox: [0, 0, 0, 0] };
-//     }
-
-//     ctx.fillStyle = "rgba(0, 0, 0, 0)";
-//     ctx.fillRect(0, 0, width, height);
-
-//     let validPoints = 0;
-//     clipped.features.forEach((feature) => {
-//       const coords = feature.geometry.coordinates;
-//       if (!Array.isArray(coords) || coords.length !== 2 || typeof coords[0] !== "number" || typeof coords[1] !== "number") {
-//         console.warn("Invalid coordinates, skipping:", coords);
-//         return;
-//       }
-
-//       const point = turf.point(coords as [number, number]);
-
-//       const inBuffer = cachedBoundaries.features.some((buffer) =>
-//         turf.booleanPointInPolygon(point, buffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)
-//       );
-
-//       let pm25Value: number | null = null;
-//       if (inBuffer && interpolated.features.length > 0) {
-//         const closest = interpolated.features.reduce(
-//           (acc, f) => {
-//             if (f.geometry.type !== "Point" || !f.properties) return acc;
-//             const dist = turf.distance(f.geometry as GeoJSON.Point, coords as [number, number], { units: "degrees" });
-//             return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
-//           },
-//           { dist: Infinity, value: 0 }
-//         );
-//         pm25Value = closest.value > 0 ? closest.value : null;
-//       } else {
-//         const pm25Feature = geoData.features.find((f) => {
-//           if (f.geometry.type === "Polygon") {
-//             return turf.booleanPointInPolygon(point, turf.polygon(f.geometry.coordinates));
-//           } else if (f.geometry.type === "MultiPolygon") {
-//             return turf.booleanPointInPolygon(point, turf.multiPolygon(f.geometry.coordinates));
-//           }
-//           return false;
-//         });
-//         pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
-//           ? pm25Feature.properties.pm25_value
-//           : null;
-//       }
-
-//       if (pm25Value == null) return;
-
-//       const color = interpolateColor(pm25Value);
-//       const x = Math.round((coords[0] - bbox[0]) / cellSize);
-//       const y = Math.round((bbox[3] - coords[1]) / cellSize);
-//       ctx.fillStyle = color;
-//       ctx.fillRect(x, y, 1, 1);
-//       validPoints++;
-//     });
-
-//     console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
-
-//     return { imageUrl: canvas.toDataURL(), bbox };
-//   };
-
-//   const cachedGrid = useMemo(() => {
-//     if (!geoData || !boundaryData) {
-//       console.warn("cachedGrid: Missing geoData or boundaryData");
-//       return { imageUrl: null, bbox: [0, 0, 0, 0] };
-//     }
-//     return generateStaticGrid(geoData, boundaryData);
-//   }, [geoData, boundaryData]);
-
-//   useEffect(() => {
-//     if (!map || !geoData || !boundaryData) {
-//       console.warn("useEffect: Missing map, geoData, or boundaryData");
 //       return;
 //     }
 
-//     const { imageUrl, bbox } = cachedGrid;
-//     console.log("useEffect: Image URL and bbox:", imageUrl, bbox);
+//     console.log("HeatMapLayer: Rendering with geoData:", geoData.features.length, "boundaryData:", boundaryData.features.length);
 
-//     if (staticLayerRef.current) {
-//       map.removeLayer(staticLayerRef.current);
-//       staticLayerRef.current = null;
-//     }
-//     if (tooltipRef.current) {
-//       tooltipRef.current.remove();
-//       tooltipRef.current = null;
+//     if (overlayRef.current) {
+//       map.removeLayer(overlayRef.current);
+//       overlayRef.current = null;
 //     }
 
-//     if (imageUrl && Array.isArray(bbox) && bbox.length === 4 && bbox.every((val) => typeof val === "number" && !isNaN(val))) {
-//       const bounds: L.LatLngBoundsExpression = [
-//         [bbox[1], bbox[0]], // [latMin, lngMin]
-//         [bbox[3], bbox[2]], // [latMax, lngMax]
-//       ];
-//       staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
-//       console.log("useEffect: ImageOverlay added to map");
-//     } else {
-//       console.warn("useEffect: Invalid imageUrl or bbox", { imageUrl, bbox });
+//     const result = generateStaticGrid(map, boundaryData, geoData);
+//     if (!result) {
+//       console.error("HeatMapLayer: Failed to generate static grid");
+//       return;
 //     }
 
-//     const handleMouseMove = (e: L.LeafletMouseEvent) => {
-//       if (inputRef.current && document.activeElement === inputRef.current) {
-//         return;
-//       }
-//       const { lat, lng } = e.latlng;
-//       if (lastPosition.current && Math.abs(lastPosition.current.lat - lat) < 0.0001 && Math.abs(lastPosition.current.lng - lng) < 0.0001) {
-//         return;
-//       }
-//       lastPosition.current = { lat, lng };
+//     const { imageUrl, bounds } = result;
+//     console.log("HeatMapLayer: Image URL and bounds:", imageUrl, bounds);
 
-//       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+//     overlayRef.current = L.imageOverlay(imageUrl, bounds, {
+//       opacity: 0.7,
+//       zIndex: 500, // Pastikan heatmap di atas basemap tapi di bawah boundary
+//     }).addTo(map);
 
-//       timeoutRef.current = setTimeout(() => {
-//         if (tooltipRef.current) tooltipRef.current.remove();
-//         const point = turf.point([lng, lat]);
-
-//         const candidates = spatialIndexRef.current?.search({
-//           minX: lng,
-//           minY: lat,
-//           maxX: lng,
-//           maxY: lat,
-//         }) || [];
-
-//         const kelurahan = boundaryData.features.find((bf, index) => {
-//           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
-//           if (bf.geometry.type !== "Polygon" && bf.geometry.type !== "MultiPolygon") return false;
-//           const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
-//           return turf.booleanPointInPolygon(point, polygon as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>);
-//         });
-
-//         const pm25Feature = geoData.features.find((feature) => {
-//           if (feature.geometry.type === "Polygon") {
-//             return turf.booleanPointInPolygon(point, turf.polygon(feature.geometry.coordinates));
-//           } else if (feature.geometry.type === "MultiPolygon") {
-//             return turf.booleanPointInPolygon(point, turf.multiPolygon(feature.geometry.coordinates));
-//           }
-//           return false;
-//         });
-//         const pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
-//           ? pm25Feature.properties.pm25_value
-//           : null;
-
-//         if (kelurahan?.properties) {
-//           tooltipRef.current = L.tooltip({
-//             sticky: true,
-//             direction: "top",
-//             offset: [0, -20],
-//             className: styles.customTooltip,
-//           })
-//             .setLatLng(e.latlng)
-//             .setContent(getTooltipContent(pm25Value, kelurahan.properties.NAMOBJ))
-//             .addTo(map);
-//         }
-//       }, 500);
-//     };
-
-//     map.on("mousemove", handleMouseMove);
+//     console.log("HeatMapLayer: ImageOverlay added to map");
 
 //     return () => {
-//       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-//       map.off("mousemove", handleMouseMove);
-//       if (tooltipRef.current) tooltipRef.current.remove();
-//       if (staticLayerRef.current) map.removeLayer(staticLayerRef.current);
+//       if (overlayRef.current) {
+//         map.removeLayer(overlayRef.current);
+//         overlayRef.current = null;
+//       }
 //     };
-//   }, [map, cachedGrid, selectedDate, inputRef, geoData, boundaryData]);
+//   }, [map, geoData, boundaryData, isLoading]);
 
-//   return (
-//     <>
-//       {isLoading && (
-//         <div className={styles.loadingOverlay}>
-//           <div className={styles.spinner}></div>
-//           <span>Memuat Heatmap...</span>
-//         </div>
-//       )}
-//       <div className={styles.legend}>
-//         <h4>Indikator PM2.5 (µg/m³)</h4>
-//         <div className={styles.gradientLegend}>
-//           <div
-//             className={styles.gradientBar}
-//             style={{
-//               background: "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
-//             }}
-//           ></div>
-//           <div className={styles.gradientLabels}>
-//             <span>0</span>
-//             <span>300+</span>
-//           </div>
-//           <div className={styles.legendLabels}>
-//             <span>Baik (0 - 50)</span>
-//             <span>Sedang (51 - 100)</span>
-//             <span>Tidak Sehat (101 - 199)</span>
-//             <span>Sangat Tidak Sehat (200 - 299)</span>
-//             <span>Berbahaya (&gt; 300)</span>
-//           </div>
-//         </div>
-//       </div>
-//     </>
-//   );
+//   return null;
 // };
 
 // export default HeatMapLayer;
 
 "use client";
 
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useCallback } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
 import * as turf from "@turf/turf";
-import * as GeoJSON from "geojson";
 import RBush from "rbush";
 import styles from "./map.module.css";
-import { GeoJSONData, BoundaryGeoJSONData, InterpolatedFeature, RBushItem, BoundaryFeature } from "./types";
+import { interpolateColor } from "../utils/color";
+import { GeoJSONData, BoundaryGeoJSONData, BoundaryFeature } from "./types";
 
 interface HeatMapLayerProps {
   geoData: GeoJSONData | null;
   boundaryData: BoundaryGeoJSONData | null;
   selectedDate: string;
   isLoading: boolean;
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
 }
 
-const interpolateColor = (value: number): string => {
-  if (value <= 50) return "rgba(0, 255, 0, 0.85)"; // Baik (Hijau)
-  if (value <= 100) return "rgba(0, 0, 255, 0.85)"; // Sedang (Biru)
-  if (value <= 199) return "rgba(255, 255, 0, 0.85)"; // Tidak Sehat (Kuning)
-  if (value <= 299) return "rgba(255, 0, 0, 0.85)"; // Sangat Tidak Sehat (Merah)
-  return "rgba(0, 0, 0, 0.85)"; // Berbahaya (Hitam)
-};
+interface RBushItem {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  featureIndex: number;
+}
+
+interface InterpolatedFeature {
+  type: "Feature";
+  geometry: GeoJSON.Point;
+  properties: { pm25_value: number };
+}
 
 const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, selectedDate, isLoading, inputRef }) => {
   const map = useMap();
@@ -3537,15 +5503,15 @@ const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, sele
   const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
 
   const getTooltipContent = (pm25Value: number | null, kelurahanName: string): string => {
-    const formattedPM25Value = pm25Value !== null && !isNaN(pm25Value) ? pm25Value.toFixed(2) : "N/A";
-    const pm25Color = pm25Value !== null && !isNaN(pm25Value) ? interpolateColor(pm25Value) : "rgba(160, 174, 192, 0.85)";
+    const formattedPm25Value = pm25Value !== null && pm25Value > 0 ? pm25Value.toFixed(2) : "No Data";
+    const pm25Color = pm25Value !== null && pm25Value > 0 ? interpolateColor(pm25Value / 100) : "#a0aec0";
     const textColor = pm25Color === "rgba(0, 255, 0, 0.85)" || pm25Color === "rgba(255, 255, 0, 0.85)" ? "#000000" : "#ffffff";
     return `
       <div class="${styles.customTooltip}">
         <div class="${styles.kelurahanName}">${kelurahanName}</div>
         <div class="${styles.aodContainer}">
           <div class="${styles.aodCircle}" style="background-color: ${pm25Color}; color: ${textColor}">
-            ${formattedPM25Value}
+            ${formattedPm25Value}
           </div>
         </div>
       </div>
@@ -3553,9 +5519,9 @@ const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, sele
   };
 
   const cachedBoundaries = useMemo(() => {
-    if (!geoData) return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>([]);
+    if (!geoData) return turf.featureCollection([]);
     const validFeatures = geoData.features
-      .filter((f) => f.properties.pm25_value != null && !isNaN(f.properties.pm25_value))
+      .filter((f) => f.properties.pm25_value != null && f.properties.pm25_value > 0)
       .map((feature) => {
         const buffered = turf.buffer(feature.geometry, 0.002, { units: "degrees" });
         if (buffered && (buffered.geometry.type === "Polygon" || buffered.geometry.type === "MultiPolygon")) {
@@ -3564,14 +5530,16 @@ const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, sele
         return null;
       })
       .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => f != null);
-    return turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(validFeatures);
+    return turf.featureCollection(validFeatures);
   }, [geoData]);
 
   useEffect(() => {
     if (!boundaryData) return;
     const spatialIndex = new RBush<RBushItem>();
     boundaryData.features.forEach((feature, index) => {
-      if (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon") return;
+      if (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon") {
+        return;
+      }
       const bbox = turf.bbox(feature.geometry);
       spatialIndex.insert({
         minX: bbox[0],
@@ -3588,140 +5556,132 @@ const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, sele
     };
   }, [boundaryData]);
 
-  const generateStaticGrid = (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
-    console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
+  const generateStaticGrid = useCallback(
+    (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
+      console.log("generateStaticGrid: Starting with geoData features:", geoData.features.length);
 
-    if (!boundaryData || !boundaryData.features) {
-      console.warn("generateStaticGrid: boundaryData is null or has no features");
-      return { imageUrl: null, bbox: [0, 0, 0, 0] };
-    }
-
-    const validBoundaryFeatures = boundaryData.features.filter(
-      (f): f is BoundaryFeature => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"
-    );
-    if (validBoundaryFeatures.length === 0) {
-      console.warn("generateStaticGrid: No valid Polygon or MultiPolygon features in boundaryData");
-      return { imageUrl: null, bbox: [0, 0, 0, 0] };
-    }
-
-    const points = geoData.features
-      .map((feature) => {
-        const centroid = turf.centroid(feature.geometry);
-        const pm25 = feature.properties.pm25_value;
-        if (pm25 == null || isNaN(pm25)) {
-          console.log("Skipping feature due to invalid pm25_value:", feature);
-          return null;
-        }
-        return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
-      })
-      .filter((p): p is [number, number, number] => p !== null);
-
-    console.log("generateStaticGrid: Valid points for interpolation:", points.length, points);
-
-    const bbox = turf.bbox(turf.featureCollection(validBoundaryFeatures));
-    console.log("generateStaticGrid: Bounding box:", bbox);
-
-    const cellSize = 0.02;
-    const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
-    console.log("generateStaticGrid: Grid points created:", grid.features.length);
-
-    let interpolated = turf.featureCollection<GeoJSON.Point>([]);
-    if (points.length > 0) {
-      try {
-        interpolated = turf.interpolate(
-          turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { pm25: p[2] }))),
-          cellSize / 4,
-          { gridType: "point", property: "pm25", units: "degrees", weight: 2.5 }
-        );
-        console.log("generateStaticGrid: Interpolated points:", interpolated.features.length);
-      } catch (error) {
-        console.error("Interpolation error:", error);
+      if (!boundaryData || !boundaryData.features) {
+        console.warn("generateStaticGrid: boundaryData is null or has no features");
         return { imageUrl: null, bbox: [0, 0, 0, 0] };
       }
-    } else {
-      console.warn("generateStaticGrid: No valid points for interpolation");
-      return { imageUrl: null, bbox: [0, 0, 0, 0] };
-    }
-    interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
 
-    const boundaryPolygon = turf.featureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>(
-      validBoundaryFeatures.map((feature) => ({
-        ...feature,
-        geometry: feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
-      }))
-    );
-
-    const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
-    console.log("generateStaticGrid: Clipped points:", clipped.features.length);
-
-    const canvas = document.createElement("canvas");
-    const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
-    const height = Math.ceil((bbox[3] - bbox[1]) / cellSize);
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-
-    if (!ctx) {
-      console.error("generateStaticGrid: Failed to get canvas context");
-      return { imageUrl: null, bbox: [0, 0, 0, 0] };
-    }
-
-    ctx.fillStyle = "rgba(0, 0, 0, 0)";
-    ctx.fillRect(0, 0, width, height);
-
-    let validPoints = 0;
-    clipped.features.forEach((feature) => {
-      const coords = feature.geometry.coordinates;
-      if (!Array.isArray(coords) || coords.length !== 2 || typeof coords[0] !== "number" || typeof coords[1] !== "number") {
-        console.warn("Invalid coordinates, skipping:", coords);
-        return;
+      const validBoundaryFeatures = boundaryData.features.filter((f): f is BoundaryFeature => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon");
+      if (validBoundaryFeatures.length === 0) {
+        console.warn("generateStaticGrid: No valid Polygon or MultiPolygon features in boundaryData");
+        return { imageUrl: null, bbox: [0, 0, 0, 0] };
       }
 
-      const point = turf.point(coords as [number, number]);
-
-      const inBuffer = cachedBoundaries.features.some((buffer) =>
-        turf.booleanPointInPolygon(point, buffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)
-      );
-
-      let pm25Value: number | null = null;
-      if (inBuffer && interpolated.features.length > 0) {
-        const closest = interpolated.features.reduce(
-          (acc, f) => {
-            if (f.geometry.type !== "Point" || !f.properties) return acc;
-            const dist = turf.distance(f.geometry as GeoJSON.Point, coords as [number, number], { units: "degrees" });
-            return dist < acc.dist ? { dist, value: f.properties.pm25 } : acc;
-          },
-          { dist: Infinity, value: 0 }
-        );
-        pm25Value = closest.value > 0 ? closest.value : null;
-      } else {
-        const pm25Feature = geoData.features.find((f) => {
-          if (f.geometry.type === "Polygon") {
-            return turf.booleanPointInPolygon(point, turf.polygon(f.geometry.coordinates));
-          } else if (f.geometry.type === "MultiPolygon") {
-            return turf.booleanPointInPolygon(point, turf.multiPolygon(f.geometry.coordinates));
+      const points = geoData.features
+        .map((feature) => {
+          const centroid = turf.centroid(feature.geometry);
+          const pm25 = feature.properties.pm25_value;
+          if (pm25 == null || pm25 <= 0 || isNaN(pm25)) {
+            console.log("Skipping feature due to invalid pm25_value:", feature);
+            return null;
           }
-          return false;
-        });
-        pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
-          ? pm25Feature.properties.pm25_value
-          : null;
+          return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], pm25];
+        })
+        .filter((p): p is [number, number, number] => p !== null);
+
+      console.log("generateStaticGrid: Valid points for interpolation:", points.length, points);
+
+      const bbox = turf.bbox(turf.featureCollection(validBoundaryFeatures));
+      console.log("generateStaticGrid: Bounding box:", bbox);
+
+      const cellSize = 0.02;
+      const grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
+      console.log("generateStaticGrid: Grid points created:", grid.features.length);
+
+      let interpolated = turf.featureCollection([]);
+      if (points.length > 0) {
+        try {
+          interpolated = turf.interpolate(turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { pm25_value: p[2] }))), cellSize / 4, { gridType: "point", property: "pm25_value", units: "degrees", weight: 2.5 });
+          console.log("generateStaticGrid: Interpolated points:", interpolated.features.length);
+        } catch (error) {
+          console.error("Interpolation error:", error);
+          return { imageUrl: null, bbox: [0, 0, 0, 0] };
+        }
+      } else {
+        console.warn("generateStaticGrid: No valid points for interpolation");
+        return { imageUrl: null, bbox: [0, 0, 0, 0] };
+      }
+      interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
+
+      const boundaryPolygon = turf.featureCollection(validBoundaryFeatures);
+      const clipped = turf.pointsWithinPolygon(turf.featureCollection(grid.features), boundaryPolygon);
+      console.log("generateStaticGrid: Clipped points:", clipped.features.length);
+
+      if (typeof window === "undefined") {
+        return { imageUrl: null, bbox: [0, 0, 0, 0] };
       }
 
-      if (pm25Value == null) return;
+      const canvas = document.createElement("canvas");
+      const width = Math.ceil((bbox[2] - bbox[0]) / cellSize);
+      const height = Math.ceil((bbox[3] - bbox[1]) / cellSize);
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
 
-      const color = interpolateColor(pm25Value);
-      const x = Math.round((coords[0] - bbox[0]) / cellSize);
-      const y = Math.round((bbox[3] - coords[1]) / cellSize);
-      ctx.fillStyle = color;
-      ctx.fillRect(x, y, 1, 1);
-      validPoints++;
-    });
+      if (!ctx) {
+        console.error("generateStaticGrid: Failed to get canvas context");
+        return { imageUrl: null, bbox: [0, 0, 0, 0] };
+      }
 
-    console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
+      ctx.fillStyle = "rgba(0, 0, 0, 0)";
+      ctx.fillRect(0, 0, width, height);
 
-    return { imageUrl: canvas.toDataURL(), bbox };
-  };
+      let validPoints = 0;
+      clipped.features.forEach((feature) => {
+        const coords = feature.geometry.coordinates;
+
+        if (!Array.isArray(coords) || coords.length !== 2 || typeof coords[0] !== "number" || typeof coords[1] !== "number") {
+          console.warn("Invalid coordinates, skipping:", coords);
+          return;
+        }
+
+        const point = turf.point(coords as [number, number]);
+
+        const inBuffer = cachedBoundaries.features.some((buffer) => turf.booleanPointInPolygon(point, buffer as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>));
+
+        let pm25Value: number | null = null;
+        if (inBuffer && interpolated.features.length > 0) {
+          const closest = interpolated.features.reduce(
+            (acc, f) => {
+              if (f.geometry.type !== "Point" || !f.properties) return acc;
+              const dist = turf.distance(f.geometry as GeoJSON.Point, coords as [number, number], { units: "degrees" });
+              return dist < acc.dist ? { dist, value: f.properties.pm25_value } : acc;
+            },
+            { dist: Infinity, value: 0 }
+          );
+          pm25Value = closest.value > 0 ? closest.value : null;
+        } else {
+          const pm25Feature = geoData.features.find((f) => {
+            if (f.geometry.type === "Polygon") {
+              return turf.booleanPointInPolygon(point, turf.polygon(f.geometry.coordinates));
+            } else if (f.geometry.type === "MultiPolygon") {
+              return turf.booleanPointInPolygon(point, turf.multiPolygon(f.geometry.coordinates) as GeoJSON.Feature<GeoJSON.MultiPolygon>);
+            }
+            return false;
+          });
+          pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && pm25Feature.properties.pm25_value > 0 ? pm25Feature.properties.pm25_value : null;
+        }
+
+        if (pm25Value == null) return;
+
+        const color = interpolateColor(pm25Value / 100);
+        const x = Math.round((coords[0] - bbox[0]) / cellSize);
+        const y = Math.round((bbox[3] - coords[1]) / cellSize);
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, 1, 1);
+        validPoints++;
+      });
+
+      console.log("generateStaticGrid: Valid points drawn on canvas:", validPoints);
+
+      return { imageUrl: canvas.toDataURL(), bbox };
+    },
+    [cachedBoundaries.features]
+  );
 
   const cachedGrid = useMemo(() => {
     if (!geoData || !boundaryData) {
@@ -3754,7 +5714,7 @@ const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, sele
         [bbox[1], bbox[0]], // [latMin, lngMin]
         [bbox[3], bbox[2]], // [latMax, lngMax]
       ];
-      staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true }).addTo(map);
+      staticLayerRef.current = L.imageOverlay(imageUrl, bounds, { opacity: 0.85, interactive: true, zIndex: 500 }).addTo(map);
       console.log("useEffect: ImageOverlay added to map");
     } else {
       console.warn("useEffect: Invalid imageUrl or bbox", { imageUrl, bbox });
@@ -3776,12 +5736,13 @@ const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, sele
         if (tooltipRef.current) tooltipRef.current.remove();
         const point = turf.point([lng, lat]);
 
-        const candidates = spatialIndexRef.current?.search({
-          minX: lng,
-          minY: lat,
-          maxX: lng,
-          maxY: lat,
-        }) || [];
+        const candidates =
+          spatialIndexRef.current?.search({
+            minX: lng,
+            minY: lat,
+            maxX: lng,
+            maxY: lat,
+          }) || [];
 
         const kelurahan = boundaryData.features.find((bf, index) => {
           if (!candidates.some((c: RBushItem) => c.featureIndex === index)) return false;
@@ -3794,13 +5755,11 @@ const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, sele
           if (feature.geometry.type === "Polygon") {
             return turf.booleanPointInPolygon(point, turf.polygon(feature.geometry.coordinates));
           } else if (feature.geometry.type === "MultiPolygon") {
-            return turf.booleanPointInPolygon(point, turf.multiPolygon(feature.geometry.coordinates));
+            return turf.booleanPointInPolygon(point, turf.multiPolygon(feature.geometry.coordinates) as GeoJSON.Feature<GeoJSON.MultiPolygon>);
           }
           return false;
         });
-        const pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && !isNaN(pm25Feature.properties.pm25_value)
-          ? pm25Feature.properties.pm25_value
-          : null;
+        const pm25Value = pm25Feature && pm25Feature.properties.pm25_value != null && pm25Feature.properties.pm25_value > 0 ? pm25Feature.properties.pm25_value : null;
 
         if (kelurahan?.properties) {
           tooltipRef.current = L.tooltip({
@@ -3829,30 +5788,23 @@ const HeatMapLayer: React.FC<HeatMapLayerProps> = ({ geoData, boundaryData, sele
   return (
     <>
       {isLoading && (
-        <div className={styles.loadingOverlay}>
+        <div className={styles.spinnerOverlay}>
           <div className={styles.spinner}></div>
           <span>Memuat Heatmap...</span>
         </div>
       )}
       <div className={styles.legend}>
-        <h4>Indikator PM2.5 (µg/m³)</h4>
+        <h4>Legenda PM2.5</h4>
         <div className={styles.gradientLegend}>
           <div
             className={styles.gradientBar}
             style={{
-              background: "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(0, 0, 255, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 0, 0, 0.85), rgba(0, 0, 0, 0.85))",
+              background: "linear-gradient(to right, rgba(0, 255, 0, 0.85), rgba(255, 255, 0, 0.85), rgba(255, 165, 0, 0.85), rgba(255, 0, 0, 0.85))",
             }}
           ></div>
           <div className={styles.gradientLabels}>
             <span>0</span>
-            <span>300+</span>
-          </div>
-          <div className={styles.legendLabels}>
-            <span>Baik (0 - 50)</span>
-            <span>Sedang (51 - 100)</span>
-            <span>Tidak Sehat (101 - 199)</span>
-            <span>Sangat Tidak Sehat (200 - 299)</span>
-            <span>Berbahaya (&gt; 300)</span>
+            <span>100+</span>
           </div>
         </div>
       </div>

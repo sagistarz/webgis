@@ -1,19 +1,396 @@
+// // // // // // // "use client";
+// // // // // // // import React, { useRef, useState, useEffect } from "react";
+// // // // // // // import { OpenStreetMapProvider } from "leaflet-geosearch";
+// // // // // // // import styles from "./map.module.css";
+// // // // // // // import L from "leaflet";
+
+// // // // // // // interface SearchBarProps {
+// // // // // // //   updateMarker: (latlng: L.LatLng) => void;
+// // // // // // //   mapRef: React.MutableRefObject<L.Map | null>;
+// // // // // // // }
+
+// // // // // // // const SearchBar = React.memo(({ updateMarker, mapRef }: SearchBarProps) => {
+// // // // // // //   const inputRef = useRef<HTMLInputElement | null>(null);
+// // // // // // //   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+// // // // // // //   const [searchQuery, setSearchQuery] = useState<string>("");
+// // // // // // //   const [searchResults, setSearchResults] = useState<any[]>([]);
+
+// // // // // // //   useEffect(() => {
+// // // // // // //     const input = inputRef.current;
+// // // // // // //     if (input) {
+// // // // // // //       const handleBlur = () => {
+// // // // // // //         setTimeout(() => setSearchResults([]), 200);
+// // // // // // //       };
+// // // // // // //       input.addEventListener("blur", handleBlur);
+// // // // // // //       return () => {
+// // // // // // //         input.removeEventListener("blur", handleBlur);
+// // // // // // //       };
+// // // // // // //     }
+// // // // // // //     return () => {};
+// // // // // // //   }, []);
+
+// // // // // // //   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+// // // // // // //     const query = e.target.value;
+// // // // // // //     setSearchQuery(query);
+
+// // // // // // //     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+
+// // // // // // //     if (query.length > 2) {
+// // // // // // //       debounceTimeout.current = setTimeout(async () => {
+// // // // // // //         try {
+// // // // // // //           const provider = new OpenStreetMapProvider();
+// // // // // // //           const results = await provider.search({ query: `${query}, Jakarta, Indonesia` });
+// // // // // // //           setSearchResults(results.slice(0, 5));
+// // // // // // //         } catch (error) {}
+// // // // // // //       }, 500);
+// // // // // // //     } else {
+// // // // // // //       setSearchResults([]);
+// // // // // // //     }
+// // // // // // //   };
+
+// // // // // // //   const handleSearchSelect = (result: any) => {
+// // // // // // //     setSearchQuery(result.label);
+// // // // // // //     setSearchResults([]);
+// // // // // // //     if (mapRef.current) {
+// // // // // // //       const { x: lng, y: lat } = result;
+// // // // // // //       updateMarker(L.latLng(lat, lng));
+// // // // // // //       mapRef.current.setView([lat, lng], 15);
+// // // // // // //     }
+// // // // // // //   };
+
+// // // // // // //   return (
+// // // // // // //     <div className="relative w-80">
+// // // // // // //       <div className="flex items-center gap-2 bg-white p-3 rounded-lg shadow-md">
+// // // // // // //         <input
+// // // // // // //           key="search-input"
+// // // // // // //           type="text"
+// // // // // // //           placeholder="Cari lokasi di Jakarta..."
+// // // // // // //           value={searchQuery}
+// // // // // // //           onChange={handleSearchChange}
+// // // // // // //           className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+// // // // // // //           ref={inputRef}
+// // // // // // //           onKeyDown={(e) => {
+// // // // // // //             e.stopPropagation();
+// // // // // // //             if (searchResults.length > 0 && e.key === "Enter") {
+// // // // // // //               e.preventDefault();
+// // // // // // //               handleSearchSelect(searchResults[0]);
+// // // // // // //             }
+// // // // // // //           }}
+// // // // // // //         />
+// // // // // // //         <button
+// // // // // // //           className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+// // // // // // //           onClick={() => {
+// // // // // // //             if (searchQuery) {
+// // // // // // //               const provider = new OpenStreetMapProvider();
+// // // // // // //               provider.search({ query: `${searchQuery}, Jakarta, Indonesia` }).then((results) => {
+// // // // // // //                 if (results.length > 0) {
+// // // // // // //                   handleSearchSelect(results[0]);
+// // // // // // //                 }
+// // // // // // //               });
+// // // // // // //             }
+// // // // // // //           }}
+// // // // // // //         >
+// // // // // // //           Cari
+// // // // // // //         </button>
+// // // // // // //       </div>
+// // // // // // //       {searchResults.length > 0 && (
+// // // // // // //         <div className="absolute top-full left-0 w-full bg-white rounded-lg shadow-lg mt-1 z-[1000] max-h-60 overflow-y-auto">
+// // // // // // //           {searchResults.map((result, index) => (
+// // // // // // //             <div
+// // // // // // //               key={index}
+// // // // // // //               className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm text-gray-700"
+// // // // // // //               onClick={() => {
+// // // // // // //                 handleSearchSelect(result);
+// // // // // // //               }}
+// // // // // // //             >
+// // // // // // //               {result.label}
+// // // // // // //             </div>
+// // // // // // //           ))}
+// // // // // // //         </div>
+// // // // // // //       )}
+// // // // // // //     </div>
+// // // // // // //   );
+// // // // // // // });
+
+// // // // // // // export default SearchBar;
+
+// // // // // // "use client";
+// // // // // // import React, { useRef, useState, useEffect } from "react";
+// // // // // // import { OpenStreetMapProvider } from "leaflet-geosearch";
+// // // // // // import L from "leaflet";
+
+// // // // // // interface SearchResult {
+// // // // // //   x: number; // Longitude
+// // // // // //   y: number; // Latitude
+// // // // // //   label: string;
+// // // // // //   bounds: L.LatLngBounds;
+// // // // // // }
+
+// // // // // // interface SearchBarProps {
+// // // // // //   updateMarker: (latlng: L.LatLng) => void;
+// // // // // //   mapRef: React.MutableRefObject<L.Map | null>;
+// // // // // // }
+
+// // // // // // const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
+// // // // // //   const inputRef = useRef<HTMLInputElement | null>(null);
+// // // // // //   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+// // // // // //   const [searchQuery, setSearchQuery] = useState<string>("");
+// // // // // //   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+
+// // // // // //   useEffect(() => {
+// // // // // //     const input = inputRef.current;
+// // // // // //     if (input) {
+// // // // // //       const handleBlur = () => {
+// // // // // //         setTimeout(() => setSearchResults([]), 200);
+// // // // // //       };
+// // // // // //       input.addEventListener("blur", handleBlur);
+// // // // // //       return () => {
+// // // // // //         input.removeEventListener("blur", handleBlur);
+// // // // // //       };
+// // // // // //     }
+// // // // // //     return () => {};
+// // // // // //   }, []);
+
+// // // // // //   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+// // // // // //     const query = e.target.value;
+// // // // // //     setSearchQuery(query);
+
+// // // // // //     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+
+// // // // // //     if (query.length > 2) {
+// // // // // //       debounceTimeout.current = setTimeout(async () => {
+// // // // // //         try {
+// // // // // //           const provider = new OpenStreetMapProvider();
+// // // // // //           const results = await provider.search({ query: `${query}, Jakarta, Indonesia` });
+// // // // // //           setSearchResults(results.slice(0, 5) as SearchResult[]);
+// // // // // //         } catch {
+// // // // // //           // Optionally handle the error (e.g., log or display a message)
+// // // // // //           // For now, silently ignore as per original code
+// // // // // //         }
+// // // // // //       }, 500);
+// // // // // //     } else {
+// // // // // //       setSearchResults([]);
+// // // // // //     }
+// // // // // //   };
+
+// // // // // //   const handleSearchSelect = (result: SearchResult) => {
+// // // // // //     setSearchQuery(result.label);
+// // // // // //     setSearchResults([]);
+// // // // // //     if (mapRef.current) {
+// // // // // //       const { x: lng, y: lat } = result;
+// // // // // //       updateMarker(L.latLng(lat, lng));
+// // // // // //       mapRef.current.setView([lat, lng], 15);
+// // // // // //     }
+// // // // // //   };
+
+// // // // // //   return (
+// // // // // //     <div className="relative w-80">
+// // // // // //       <div className="flex items-center gap-2 bg-white p-3 rounded-lg shadow-md">
+// // // // // //         <input
+// // // // // //           key="search-input"
+// // // // // //           type="text"
+// // // // // //           placeholder="Cari lokasi di Jakarta..."
+// // // // // //           value={searchQuery}
+// // // // // //           onChange={handleSearchChange}
+// // // // // //           className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+// // // // // //           ref={inputRef}
+// // // // // //           onKeyDown={(e) => {
+// // // // // //             e.stopPropagation();
+// // // // // //             if (searchResults.length > 0 && e.key === "Enter") {
+// // // // // //               e.preventDefault();
+// // // // // //               handleSearchSelect(searchResults[0]);
+// // // // // //             }
+// // // // // //           }}
+// // // // // //         />
+// // // // // //         <button
+// // // // // //           className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+// // // // // //           onClick={() => {
+// // // // // //             if (searchQuery) {
+// // // // // //               const provider = new OpenStreetMapProvider();
+// // // // // //               provider.search({ query: `${searchQuery}, Jakarta, Indonesia` }).then((results) => {
+// // // // // //                 if (results.length > 0) {
+// // // // // //                   handleSearchSelect(results[0] as SearchResult);
+// // // // // //                 }
+// // // // // //               });
+// // // // // //             }
+// // // // // //           }}
+// // // // // //         >
+// // // // // //           Cari
+// // // // // //         </button>
+// // // // // //       </div>
+// // // // // //       {searchResults.length > 0 && (
+// // // // // //         <div className="absolute top-full left-0 w-full bg-white rounded-lg shadow-lg mt-1 z-[1000] max-h-60 overflow-y-auto">
+// // // // // //           {searchResults.map((result, index) => (
+// // // // // //             <div
+// // // // // //               key={index}
+// // // // // //               className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm text-gray-700"
+// // // // // //               onClick={() => {
+// // // // // //                 handleSearchSelect(result);
+// // // // // //               }}
+// // // // // //             >
+// // // // // //               {result.label}
+// // // // // //             </div>
+// // // // // //           ))}
+// // // // // //         </div>
+// // // // // //       )}
+// // // // // //     </div>
+// // // // // //   );
+// // // // // // };
+
+// // // // // // SearchBar.displayName = "SearchBar";
+
+// // // // // // export default React.memo(SearchBar);
+
+// // // // // "use client";
+// // // // // import React, { useRef, useState, useEffect } from "react";
+// // // // // import { OpenStreetMapProvider } from "leaflet-geosearch";
+// // // // // import L from "leaflet";
+
+// // // // // interface SearchResult {
+// // // // //   x: number; // Longitude
+// // // // //   y: number; // Latitude
+// // // // //   label: string;
+// // // // //   bounds: L.LatLngBounds;
+// // // // // }
+
+// // // // // interface SearchBarProps {
+// // // // //   updateMarker: (latlng: L.LatLng) => void;
+// // // // //   mapRef: React.MutableRefObject<L.Map | null>;
+// // // // // }
+
+// // // // // const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
+// // // // //   const inputRef = useRef<HTMLInputElement | null>(null);
+// // // // //   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+// // // // //   const [searchQuery, setSearchQuery] = useState<string>("");
+// // // // //   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+
+// // // // //   useEffect(() => {
+// // // // //     const input = inputRef.current;
+// // // // //     if (input) {
+// // // // //       const handleBlur = () => {
+// // // // //         setTimeout(() => setSearchResults([]), 200);
+// // // // //       };
+// // // // //       input.addEventListener("blur", handleBlur);
+// // // // //       return () => {
+// // // // //         input.removeEventListener("blur", handleBlur);
+// // // // //       };
+// // // // //     }
+// // // // //     return () => {};
+// // // // //   }, []);
+
+// // // // //   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+// // // // //     const query = e.target.value;
+// // // // //     setSearchQuery(query);
+
+// // // // //     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+
+// // // // //     if (query.length > 2) {
+// // // // //       debounceTimeout.current = setTimeout(async () => {
+// // // // //         try {
+// // // // //           const provider = new OpenStreetMapProvider();
+// // // // //           const results = await provider.search({ query: `${query}, Jakarta, Indonesia` });
+// // // // //           setSearchResults(results.slice(0, 5) as SearchResult[]);
+// // // // //         } catch {
+// // // // //           // Optionally handle the error (e.g., log or display a message)
+// // // // //         }
+// // // // //       }, 500);
+// // // // //     } else {
+// // // // //       setSearchResults([]);
+// // // // //     }
+// // // // //   };
+
+// // // // //   const handleSearchSelect = (result: SearchResult) => {
+// // // // //     setSearchQuery(result.label);
+// // // // //     setSearchResults([]);
+// // // // //     if (mapRef.current) {
+// // // // //       const { x: lng, y: lat } = result;
+// // // // //       updateMarker(L.latLng(lat, lng));
+// // // // //       mapRef.current.setView([lat, lng], 15);
+// // // // //     }
+// // // // //   };
+
+// // // // //   return (
+// // // // //     <div className="relative w-80">
+// // // // //       <div className="flex items-center gap-2 bg-white p-3 rounded-lg shadow-md">
+// // // // //         <input
+// // // // //           key="search-input"
+// // // // //           type="text"
+// // // // //           placeholder="Cari lokasi di Jakarta..."
+// // // // //           value={searchQuery}
+// // // // //           onChange={handleSearchChange}
+// // // // //           className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+// // // // //           ref={inputRef}
+// // // // //           onKeyDown={(e) => {
+// // // // //             e.stopPropagation();
+// // // // //             if (searchResults.length > 0 && e.key === "Enter") {
+// // // // //               e.preventDefault();
+// // // // //               handleSearchSelect(searchResults[0]);
+// // // // //             }
+// // // // //           }}
+// // // // //         />
+// // // // //         <button
+// // // // //           className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+// // // // //           onClick={() => {
+// // // // //             if (searchQuery) {
+// // // // //               const provider = new OpenStreetMapProvider();
+// // // // //               provider.search({ query: `${searchQuery}, Jakarta, Indonesia` }).then((results) => {
+// // // // //                 if (results.length > 0) {
+// // // // //                   handleSearchSelect(results[0] as SearchResult);
+// // // // //                 }
+// // // // //               });
+// // // // //             }
+// // // // //           }}
+// // // // //         >
+// // // // //           Cari
+// // // // //         </button>
+// // // // //       </div>
+// // // // //       {searchResults.length > 0 && (
+// // // // //         <div className="absolute top-full left-0 w-full bg-white rounded-lg shadow-lg mt-1 z-[1000] max-h-60 overflow-y-auto">
+// // // // //           {searchResults.map((result, index) => (
+// // // // //             <div
+// // // // //               key={index}
+// // // // //               className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm text-gray-700"
+// // // // //               onClick={() => {
+// // // // //                 handleSearchSelect(result);
+// // // // //               }}
+// // // // //             >
+// // // // //               {result.label}
+// // // // //             </div>
+// // // // //           ))}
+// // // // //         </div>
+// // // // //       )}
+// // // // //     </div>
+// // // // //   );
+// // // // // };
+
+// // // // // SearchBar.displayName = "SearchBar";
+
+// // // // // export default React.memo(SearchBar);
+
 // // // // "use client";
+
 // // // // import React, { useRef, useState, useEffect } from "react";
-// // // // import { OpenStreetMapProvider } from "leaflet-geosearch";
-// // // // import styles from "./map.module.css";
+// // // // import { OpenStreetMapProvider, GeoSearchControl } from "leaflet-geosearch";
 // // // // import L from "leaflet";
+// // // // import styles from "./map.module.css"; // Pastikan file CSS ini ada
+
+// // // // interface SearchResult {
+// // // //   x: number; // Longitude
+// // // //   y: number; // Latitude
+// // // //   label: string;
+// // // //   bounds: L.LatLngBounds | null; // Ubah ke L.LatLngBounds | null
+// // // // }
 
 // // // // interface SearchBarProps {
 // // // //   updateMarker: (latlng: L.LatLng) => void;
 // // // //   mapRef: React.MutableRefObject<L.Map | null>;
 // // // // }
 
-// // // // const SearchBar = React.memo(({ updateMarker, mapRef }: SearchBarProps) => {
-// // // //   const inputRef = useRef<HTMLInputElement | null>(null);
+// // // // const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
+// // // //   const inputRef = useRef<HTMLInputElement>(null); // Hapus | null karena menggunakan null!
 // // // //   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 // // // //   const [searchQuery, setSearchQuery] = useState<string>("");
-// // // //   const [searchResults, setSearchResults] = useState<any[]>([]);
+// // // //   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
 // // // //   useEffect(() => {
 // // // //     const input = inputRef.current;
@@ -40,15 +417,30 @@
 // // // //         try {
 // // // //           const provider = new OpenStreetMapProvider();
 // // // //           const results = await provider.search({ query: `${query}, Jakarta, Indonesia` });
-// // // //           setSearchResults(results.slice(0, 5));
-// // // //         } catch (error) {}
+// // // //           // Konversi hasil pencarian ke tipe SearchResult
+// // // //           const formattedResults: SearchResult[] = results.slice(0, 5).map((result) => ({
+// // // //             x: result.x,
+// // // //             y: result.y,
+// // // //             label: result.label,
+// // // //             bounds: result.bounds
+// // // //               ? L.latLngBounds(
+// // // //                   [result.bounds[0][0], result.bounds[0][1]], // [lat, lng] kiri bawah
+// // // //                   [result.bounds[1][0], result.bounds[1][1]] // [lat, lng] kanan atas
+// // // //                 )
+// // // //               : null,
+// // // //           }));
+// // // //           setSearchResults(formattedResults);
+// // // //         } catch (error) {
+// // // //           console.error("Search error:", error);
+// // // //           setSearchResults([]);
+// // // //         }
 // // // //       }, 500);
 // // // //     } else {
 // // // //       setSearchResults([]);
 // // // //     }
 // // // //   };
 
-// // // //   const handleSearchSelect = (result: any) => {
+// // // //   const handleSearchSelect = (result: SearchResult) => {
 // // // //     setSearchQuery(result.label);
 // // // //     setSearchResults([]);
 // // // //     if (mapRef.current) {
@@ -84,7 +476,13 @@
 // // // //               const provider = new OpenStreetMapProvider();
 // // // //               provider.search({ query: `${searchQuery}, Jakarta, Indonesia` }).then((results) => {
 // // // //                 if (results.length > 0) {
-// // // //                   handleSearchSelect(results[0]);
+// // // //                   const formattedResult: SearchResult = {
+// // // //                     x: results[0].x,
+// // // //                     y: results[0].y,
+// // // //                     label: results[0].label,
+// // // //                     bounds: results[0].bounds ? L.latLngBounds([results[0].bounds[0][0], results[0].bounds[0][1]], [results[0].bounds[1][0], results[0].bounds[1][1]]) : null,
+// // // //                   };
+// // // //                   handleSearchSelect(formattedResult);
 // // // //                 }
 // // // //               });
 // // // //             }
@@ -110,11 +508,14 @@
 // // // //       )}
 // // // //     </div>
 // // // //   );
-// // // // });
+// // // // };
 
-// // // // export default SearchBar;
+// // // // SearchBar.displayName = "SearchBar";
+
+// // // // export default React.memo(SearchBar);
 
 // // // "use client";
+
 // // // import React, { useRef, useState, useEffect } from "react";
 // // // import { OpenStreetMapProvider } from "leaflet-geosearch";
 // // // import L from "leaflet";
@@ -123,7 +524,7 @@
 // // //   x: number; // Longitude
 // // //   y: number; // Latitude
 // // //   label: string;
-// // //   bounds: L.LatLngBounds;
+// // //   bounds: L.LatLngBounds | null;
 // // // }
 
 // // // interface SearchBarProps {
@@ -132,7 +533,7 @@
 // // // }
 
 // // // const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
-// // //   const inputRef = useRef<HTMLInputElement | null>(null);
+// // //   const inputRef = useRef<HTMLInputElement>(null);
 // // //   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 // // //   const [searchQuery, setSearchQuery] = useState<string>("");
 // // //   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -162,10 +563,16 @@
 // // //         try {
 // // //           const provider = new OpenStreetMapProvider();
 // // //           const results = await provider.search({ query: `${query}, Jakarta, Indonesia` });
-// // //           setSearchResults(results.slice(0, 5) as SearchResult[]);
-// // //         } catch {
-// // //           // Optionally handle the error (e.g., log or display a message)
-// // //           // For now, silently ignore as per original code
+// // //           const formattedResults: SearchResult[] = results.slice(0, 5).map((result) => ({
+// // //             x: result.x,
+// // //             y: result.y,
+// // //             label: result.label,
+// // //             bounds: result.bounds ? L.latLngBounds([result.bounds[0][0], result.bounds[0][1]], [result.bounds[1][0], result.bounds[1][1]]) : null,
+// // //           }));
+// // //           setSearchResults(formattedResults);
+// // //         } catch (error) {
+// // //           console.error("Search error:", error);
+// // //           setSearchResults([]);
 // // //         }
 // // //       }, 500);
 // // //     } else {
@@ -209,7 +616,13 @@
 // // //               const provider = new OpenStreetMapProvider();
 // // //               provider.search({ query: `${searchQuery}, Jakarta, Indonesia` }).then((results) => {
 // // //                 if (results.length > 0) {
-// // //                   handleSearchSelect(results[0] as SearchResult);
+// // //                   const formattedResult: SearchResult = {
+// // //                     x: results[0].x,
+// // //                     y: results[0].y,
+// // //                     label: results[0].label,
+// // //                     bounds: results[0].bounds ? L.latLngBounds([results[0].bounds[0][0], results[0].bounds[0][1]], [results[0].bounds[1][0], results[0].bounds[1][1]]) : null,
+// // //                   };
+// // //                   handleSearchSelect(formattedResult);
 // // //                 }
 // // //               });
 // // //             }
@@ -242,15 +655,19 @@
 // // // export default React.memo(SearchBar);
 
 // // "use client";
+
 // // import React, { useRef, useState, useEffect } from "react";
-// // import { OpenStreetMapProvider } from "leaflet-geosearch";
-// // import L from "leaflet";
+// // import dynamic from "next/dynamic";
+
+// // // Impor leaflet dan leaflet-geosearch secara dinamis
+// // const L = dynamic(() => import("leaflet"), { ssr: false });
+// // const OpenStreetMapProvider = dynamic(() => import("leaflet-geosearch").then((mod) => mod.OpenStreetMapProvider), { ssr: false });
 
 // // interface SearchResult {
 // //   x: number; // Longitude
 // //   y: number; // Latitude
 // //   label: string;
-// //   bounds: L.LatLngBounds;
+// //   bounds: L.LatLngBounds | null;
 // // }
 
 // // interface SearchBarProps {
@@ -259,12 +676,15 @@
 // // }
 
 // // const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
-// //   const inputRef = useRef<HTMLInputElement | null>(null);
+// //   const inputRef = useRef<HTMLInputElement>(null);
 // //   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 // //   const [searchQuery, setSearchQuery] = useState<string>("");
 // //   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
 // //   useEffect(() => {
+// //     // Pastikan kode ini hanya dijalankan di sisi klien
+// //     if (typeof window === "undefined") return;
+
 // //     const input = inputRef.current;
 // //     if (input) {
 // //       const handleBlur = () => {
@@ -286,12 +706,22 @@
 
 // //     if (query.length > 2) {
 // //       debounceTimeout.current = setTimeout(async () => {
+// //         // Pastikan kode ini hanya dijalankan di sisi klien
+// //         if (typeof window === "undefined") return;
+
 // //         try {
-// //           const provider = new OpenStreetMapProvider();
+// //           const provider = new (await OpenStreetMapProvider)();
 // //           const results = await provider.search({ query: `${query}, Jakarta, Indonesia` });
-// //           setSearchResults(results.slice(0, 5) as SearchResult[]);
-// //         } catch {
-// //           // Optionally handle the error (e.g., log or display a message)
+// //           const formattedResults: SearchResult[] = results.slice(0, 5).map((result) => ({
+// //             x: result.x,
+// //             y: result.y,
+// //             label: result.label,
+// //             bounds: result.bounds ? (L as any).latLngBounds([result.bounds[0][0], result.bounds[0][1]], [result.bounds[1][0], result.bounds[1][1]]) : null,
+// //           }));
+// //           setSearchResults(formattedResults);
+// //         } catch (error) {
+// //           console.error("Search error:", error);
+// //           setSearchResults([]);
 // //         }
 // //       }, 500);
 // //     } else {
@@ -304,7 +734,7 @@
 // //     setSearchResults([]);
 // //     if (mapRef.current) {
 // //       const { x: lng, y: lat } = result;
-// //       updateMarker(L.latLng(lat, lng));
+// //       updateMarker((L as any).latLng(lat, lng));
 // //       mapRef.current.setView([lat, lng], 15);
 // //     }
 // //   };
@@ -330,14 +760,23 @@
 // //         />
 // //         <button
 // //           className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-// //           onClick={() => {
-// //             if (searchQuery) {
-// //               const provider = new OpenStreetMapProvider();
-// //               provider.search({ query: `${searchQuery}, Jakarta, Indonesia` }).then((results) => {
+// //           onClick={async () => {
+// //             if (searchQuery && typeof window !== "undefined") {
+// //               try {
+// //                 const provider = new (await OpenStreetMapProvider)();
+// //                 const results = await provider.search({ query: `${searchQuery}, Jakarta, Indonesia` });
 // //                 if (results.length > 0) {
-// //                   handleSearchSelect(results[0] as SearchResult);
+// //                   const formattedResult: SearchResult = {
+// //                     x: results[0].x,
+// //                     y: results[0].y,
+// //                     label: results[0].label,
+// //                     bounds: results[0].bounds ? (L as any).latLngBounds([results[0].bounds[0][0], results[0].bounds[0][1]], [results[0].bounds[1][0], results[0].bounds[1][1]]) : null,
+// //                   };
+// //                   handleSearchSelect(formattedResult);
 // //                 }
-// //               });
+// //               } catch (error) {
+// //                 console.error("Search error:", error);
+// //               }
 // //             }
 // //           }}
 // //         >
@@ -370,15 +809,16 @@
 // "use client";
 
 // import React, { useRef, useState, useEffect } from "react";
-// import { OpenStreetMapProvider, GeoSearchControl } from "leaflet-geosearch";
+
+// // Impor leaflet dan leaflet-geosearch secara statis, tetapi kita akan mengontrol eksekusi di sisi klien
 // import L from "leaflet";
-// import styles from "./map.module.css"; // Pastikan file CSS ini ada
+// import { OpenStreetMapProvider, GeoSearchControl } from "leaflet-geosearch";
 
 // interface SearchResult {
 //   x: number; // Longitude
 //   y: number; // Latitude
 //   label: string;
-//   bounds: L.LatLngBounds | null; // Ubah ke L.LatLngBounds | null
+//   bounds: L.LatLngBounds | null;
 // }
 
 // interface SearchBarProps {
@@ -387,12 +827,15 @@
 // }
 
 // const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
-//   const inputRef = useRef<HTMLInputElement>(null); // Hapus | null karena menggunakan null!
+//   const inputRef = useRef<HTMLInputElement>(null);
 //   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 //   const [searchQuery, setSearchQuery] = useState<string>("");
 //   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
 //   useEffect(() => {
+//     // Pastikan kode ini hanya dijalankan di sisi klien
+//     if (typeof window === "undefined") return;
+
 //     const input = inputRef.current;
 //     if (input) {
 //       const handleBlur = () => {
@@ -412,22 +855,16 @@
 
 //     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
 
-//     if (query.length > 2) {
+//     if (query.length > 2 && typeof window !== "undefined") {
 //       debounceTimeout.current = setTimeout(async () => {
 //         try {
 //           const provider = new OpenStreetMapProvider();
 //           const results = await provider.search({ query: `${query}, Jakarta, Indonesia` });
-//           // Konversi hasil pencarian ke tipe SearchResult
-//           const formattedResults: SearchResult[] = results.slice(0, 5).map((result) => ({
+//           const formattedResults: SearchResult[] = results.slice(0, 5).map((result: any) => ({
 //             x: result.x,
 //             y: result.y,
 //             label: result.label,
-//             bounds: result.bounds
-//               ? L.latLngBounds(
-//                   [result.bounds[0][0], result.bounds[0][1]], // [lat, lng] kiri bawah
-//                   [result.bounds[1][0], result.bounds[1][1]] // [lat, lng] kanan atas
-//                 )
-//               : null,
+//             bounds: result.bounds ? L.latLngBounds([result.bounds[0][0], result.bounds[0][1]], [result.bounds[1][0], result.bounds[1][1]]) : null,
 //           }));
 //           setSearchResults(formattedResults);
 //         } catch (error) {
@@ -472,7 +909,7 @@
 //         <button
 //           className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
 //           onClick={() => {
-//             if (searchQuery) {
+//             if (searchQuery && typeof window !== "undefined") {
 //               const provider = new OpenStreetMapProvider();
 //               provider.search({ query: `${searchQuery}, Jakarta, Indonesia` }).then((results) => {
 //                 if (results.length > 0) {
@@ -517,8 +954,15 @@
 "use client";
 
 import React, { useRef, useState, useEffect } from "react";
-import { OpenStreetMapProvider } from "leaflet-geosearch";
 import L from "leaflet";
+import { OpenStreetMapProvider } from "leaflet-geosearch";
+
+interface GeoSearchResult {
+  x: number; // Longitude
+  y: number; // Latitude
+  label: string;
+  bounds: [number, number][] | null;
+}
 
 interface SearchResult {
   x: number; // Longitude
@@ -539,6 +983,8 @@ const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
     const input = inputRef.current;
     if (input) {
       const handleBlur = () => {
@@ -558,12 +1004,12 @@ const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
 
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
 
-    if (query.length > 2) {
+    if (query.length > 2 && typeof window !== "undefined") {
       debounceTimeout.current = setTimeout(async () => {
         try {
           const provider = new OpenStreetMapProvider();
-          const results = await provider.search({ query: `${query}, Jakarta, Indonesia` });
-          const formattedResults: SearchResult[] = results.slice(0, 5).map((result) => ({
+          const results: GeoSearchResult[] = await provider.search({ query: `${query}, Jakarta, Indonesia` });
+          const formattedResults: SearchResult[] = results.slice(0, 5).map((result: GeoSearchResult) => ({
             x: result.x,
             y: result.y,
             label: result.label,
@@ -612,9 +1058,9 @@ const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
         <button
           className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
           onClick={() => {
-            if (searchQuery) {
+            if (searchQuery && typeof window !== "undefined") {
               const provider = new OpenStreetMapProvider();
-              provider.search({ query: `${searchQuery}, Jakarta, Indonesia` }).then((results) => {
+              provider.search({ query: `${searchQuery}, Jakarta, Indonesia` }).then((results: GeoSearchResult[]) => {
                 if (results.length > 0) {
                   const formattedResult: SearchResult = {
                     x: results[0].x,
