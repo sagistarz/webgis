@@ -1,0 +1,102 @@
+.searchBarContainer {
+  position: absolute;
+  top: 120px;
+  left: 0px;
+  z-index: 1100; /* Lebih tinggi dari date picker */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: white;
+  padding: 12px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.searchLabel {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  font-family: var(--font-poppins);
+}
+
+.searchInputContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: black;
+}
+
+.searchInput {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: var(--font-poppins);
+  background: #f9fafb;
+  width: 200px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.searchButton {
+  padding: 10px 16px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: var(--font-poppins);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.searchButton:hover {
+  background: #1d4ed8;
+}
+
+.searchError {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background: #fee2e2;
+  color: #dc2626;
+  padding: 8px;
+  border-radius: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  font-family: var(--font-poppins);
+  z-index: 1000;
+}
+
+.searchResults {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-top: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.searchResultItem {
+  padding: 8px 12px;
+  font-size: 14px;
+  font-family: var(--font-poppins);
+  color: #374151;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.searchResultItem:hover {
+  background: #f3f4f6;
+}

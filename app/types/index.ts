@@ -1,97 +1,77 @@
-// // // import { GeoJSON } from "geojson";
+import * as GeoJSON from "geojson";
 
-// // // export interface PM25Data {
-// // //   date: string;
-// // //   PM2_5: number;
-// // // }
-
-// // // export interface JakartaFeatureProperties {
-// // //   name: string;
-// // //   city?: string;
-// // //   district?: string;
-// // //   subdistrict?: string;
-// // //   pm25: number;
-// // //   color?: string;
-// // //   updated: string;
-// // //   kecamatan?: string;
-// // //   kota?: string;
-// // //   // tambahkan properti lain yang diperlukan
-// // //   [key: string]: any; // untuk menangani properti tambahan
-// // // }
-
-// // // export interface JakartaFeature extends GeoJSON.Feature<GeoJSON.Polygon> {
-// // //   properties: JakartaFeatureProperties;
-// // // }
-
-// // import { GeoJSON, Polygon, MultiPolygon } from "geojson";
-
-// // export interface PM25Data {
-// //   date: string;
-// //   PM2_5: number;
-// // }
-
-// // export interface JakartaFeatureProperties {
-// //   name: string;
-// //   city?: string;
-// //   district?: string;
-// //   subdistrict?: string;
-// //   pm25: number;
-// //   color?: string;
-// //   updated: string;
-// //   kecamatan?: string;
-// //   kota?: string;
-// //   aod_value?: number;
-// //   NAMOBJ?: string;
-// //   [key: string]: string | number | undefined;
-// // }
-
-// // export interface JakartaFeature extends GeoJSON.Feature<Polygon | MultiPolygon, JakartaFeatureProperties> {}
-
-// import { GeoJSON, Polygon, MultiPolygon } from "geojson";
-
-// export interface PM25Data {
-//   date: string;
-//   PM2_5: number;
-// }
-
-// export interface JakartaFeatureProperties {
-//   name: string;
-//   city?: string;
-//   district?: string;
-//   subdistrict?: string;
-//   pm25: number;
-//   color?: string;
-//   updated: string;
-//   kecamatan?: string;
-//   kota?: string;
-//   aod_value?: number;
-//   NAMOBJ?: string;
-//   // Allow additional properties with specific types
-//   [key: string]: string | number | boolean | null | undefined;
-// }
-
-// export interface JakartaFeature extends GeoJSON.Feature<Polygon | MultiPolygon, JakartaFeatureProperties> {}
-
-import { GeoJSON, Polygon, MultiPolygon } from "geojson";
-
-export interface PM25Data {
-  date: string;
-  PM2_5: number;
+export interface Feature {
+  type: "Feature";
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+  properties: {
+    aod_value: number | null;
+    pm25_value: number | null;
+  } & Record<string, unknown>;
 }
 
-export interface JakartaFeatureProperties {
+export interface BoundaryFeature {
+  type: "Feature";
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+  properties: {
+    NAMOBJ: string;
+  } & Record<string, unknown>;
+}
+
+export interface GeoJSONData {
+  type: "FeatureCollection";
+  features: Feature[];
+}
+
+export interface BoundaryGeoJSONData {
+  type: "FeatureCollection";
+  features: BoundaryFeature[];
+}
+
+export interface PM25Data {
+  id: number;
+  station_name: string;
+  latitude: number;
+  longitude: number;
+  date: string;
+  pm25_value: number | null;
+  station: number;
+}
+
+export interface WeatherData {
+  id: number;
+  temperature: number;
+  precipitation: number;
+  humidity: number;
+  wind_dir: number;
+  wind_speed: number;
+  station_name: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface StationData {
+  station_name: string;
+  latitude: number;
+  longitude: number;
+  pm25_value: number | null;
+}
+
+export interface FeatureProperties {
   name: string;
   city?: string;
   district?: string;
   subdistrict?: string;
-  pm25: number;
+  pm25_value?: number;
+  aod_value?: number;
   color?: string;
   updated: string;
   kecamatan?: string;
   kota?: string;
-  aod_value?: number;
   NAMOBJ?: string;
   [key: string]: string | number | boolean | null | undefined;
 }
 
-export type JakartaFeature = GeoJSON.Feature<Polygon | MultiPolygon, JakartaFeatureProperties>;
+export interface BoundaryProperties {
+  NAMOBJ: string;
+  [key: string]: string | number | boolean | null | undefined;
+}

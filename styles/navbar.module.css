@@ -1,0 +1,93 @@
+.navbar {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background-color: #ffffff;
+  padding: 10px 20px;
+  position: fixed;
+  top: 0;
+  z-index: 1100;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.left {
+  flex: 1;
+  font-weight: 700;
+  color: #6a9c80;
+  font-size: 25px;
+}
+
+.center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 30px;
+  font-weight: 600;
+}
+
+.navLink {
+  background: none;
+  border: none;
+  color: #c5c5c5;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.3s ease-in-out;
+}
+
+.navLink:hover,
+.navLink:focus {
+  color: #6a9c80;
+}
+
+.active {
+  color: #6a9c80 !important;
+}
+
+.dropdown {
+  position: relative;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 40px;
+  left: -100%;
+  background-color: #ffffff;
+  border: 1px solid #c5c5c5;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 1101;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+}
+
+.dropdownItem {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #c5c5c5;
+  text-decoration: none;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.dropdownItem:hover,
+.dropdownItem.active {
+  background-color: #f0f0f0;
+  color: #6a9c80;
+}
+
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px; /* Sesuaikan dengan tinggi navbar */
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 900; /* Lebih rendah dari search bar dan date picker */
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+}
