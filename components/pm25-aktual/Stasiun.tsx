@@ -36,7 +36,6 @@ const MapComponent = React.memo(
     getWeatherForStation,
     handleMarkerClick,
     mapRef,
-    isSplitView,
   }: {
     stations: StationData[];
     weatherData: WeatherData[];
