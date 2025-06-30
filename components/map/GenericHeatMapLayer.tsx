@@ -1,6 +1,7 @@
+// components/map/GenericHeatMapLayer.tsx
 "use client";
 
-import { useEffect, useRef, useMemo, useCallback, useState } from "react";
+import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import { useMap } from "react-leaflet";
 import dynamic from "next/dynamic";
 import * as turf from "@turf/turf";
@@ -42,31 +43,10 @@ interface InterpolatedFeature {
 const GenericHeatMapLayer: React.FC<HeatMapLayerProps> = ({ dataType, geoData, boundaryData, selectedDate, setSelectedDate, isLoading, legendTitle, inputRef }) => {
   const map = useMap();
   const staticLayerRef = useRef<L.ImageOverlay | null>(null);
-  const tooltipRef = useRef<L.Tooltip | null>(null);
-  const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
-  const interpolatedDataRef = useRef<InterpolatedFeature[]>([]);
-  const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [bounds, setBounds] = useState<L.LatLngBounds | null>(null);
-
-  const getTooltipContent = useCallback(
-    (value: number | null, kelurahanName: string): string => {
-      const formattedValue = value !== null && value > 0 ? (dataType === "aod" ? value.toFixed(4) : value.toFixed(2)) : "No data";
-      const color = value !== null && value > 0 ? (dataType === "aod" ? interpolateColor(value) : interpolatePM25Color(value)) : "#a0aec0";
-      const textColor = color === "rgba(0, 255, 0, 0.85)" || color === "rgba(255, 255, 0, 0.85)" ? "#000000" : "#ffffff";
-      return `
-        <div class="${styles.customTooltip}">
-          <div class="${styles.kelurahanName}">${kelurahanName}</div>
-          <div class="${styles.valueContainer}">
-            <div class="${styles.valueCircle}" style="background-color: ${color}; color: ${textColor}">
-              ${formattedValue} ${dataType === "aod" || formattedValue === "No data" ? "" : "µg/m³"}
-            </div>
-          </div>
-        </div>
-      `;
-    },
-    [dataType]
-  );
+  const spatialIndexRef = useRef<RBush<RBushItem> | null>(null);
+  const interpolatedDataRef = useRef<InterpolatedFeature[]>([]);
 
   const cachedBoundaries = useMemo(() => {
     if (!geoData) {
@@ -96,9 +76,7 @@ const GenericHeatMapLayer: React.FC<HeatMapLayerProps> = ({ dataType, geoData, b
       console.log("Tidak ada boundaryData atau fitur, melewati pembuatan indeks spasial");
       return;
     }
-    console.log("boundaryData.features:", boundaryData.features);
     const spatialIndex = new RBush<RBushItem>();
-    console.log("Jumlah fitur boundaryData:", boundaryData.features.length);
     boundaryData.features.forEach((feature: BoundaryFeature, index: number) => {
       if (!feature.geometry) {
         console.log(`Melewati fitur ${index}: Geometri tidak valid`);
@@ -117,24 +95,20 @@ const GenericHeatMapLayer: React.FC<HeatMapLayerProps> = ({ dataType, geoData, b
           maxY: bbox[3],
           featureIndex: index,
         });
-        console.log(`Menambahkan fitur ${index} (${feature.properties?.NAMOBJ || "Tidak ada nama"}):`, bbox);
       } catch {
         console.error(`Error memproses fitur ${index}`);
         return;
       }
     });
-    console.log("Indeks spasial selesai dibuat, jumlah item:", spatialIndex.all().length);
     spatialIndexRef.current = spatialIndex;
 
     return () => {
       spatialIndexRef.current = null;
-      console.log("Membersihkan indeks spasial");
     };
   }, [boundaryData]);
 
   const generateStaticGrid = useCallback(
     (geoData: GeoJSONData, boundaryData: BoundaryGeoJSONData) => {
-      console.log("generateStaticGrid: Memulai dengan jumlah fitur geoData:", geoData.features.length);
       if (!boundaryData || !boundaryData.features) {
         console.warn("generateStaticGrid: boundaryData kosong atau tidak ada fitur");
         return { imageUrl: null, bbox: [0, 0, 0, 0] };
@@ -167,16 +141,12 @@ const GenericHeatMapLayer: React.FC<HeatMapLayerProps> = ({ dataType, geoData, b
           return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0], value];
         })
         .filter((p): p is [number, number, number] => p != null);
-      console.log("generateStaticGrid: Jumlah titik valid untuk interpolasi:", points.length);
 
       const bbox = turf.bbox(turf.featureCollection(validBoundaryFeatures));
-      console.log("generateStaticGrid: Bounding box:", bbox);
-
       const cellSize = 0.02;
       let grid;
       try {
         grid = turf.pointGrid(bbox, cellSize, { units: "degrees" });
-        console.log("generateStaticGrid: Titik grid dibuat:", grid.features.length);
       } catch {
         console.error("generateStaticGrid: Error membuat grid titik");
         return { imageUrl: null, bbox: [0, 0, 0, 0] };
@@ -186,13 +156,10 @@ const GenericHeatMapLayer: React.FC<HeatMapLayerProps> = ({ dataType, geoData, b
       if (points.length > 0) {
         try {
           interpolated = turf.interpolate(turf.featureCollection(points.map((p) => turf.point([p[1], p[0]], { value: p[2] }))), cellSize / 4, { gridType: "point", property: "value", units: "degrees", weight: 2.5 });
-          console.log("generateStaticGrid: Titik interpolasi dibuat:", interpolated.features.length);
         } catch {
           console.error("generateStaticGrid: Error menginterpolasi data");
           return { imageUrl: null, bbox: [0, 0, 0, 0] };
         }
-      } else {
-        console.warn("generateStaticGrid: Tidak ada titik valid untuk interpolasi");
       }
       interpolatedDataRef.current = interpolated.features as InterpolatedFeature[];
 
@@ -243,7 +210,7 @@ const GenericHeatMapLayer: React.FC<HeatMapLayerProps> = ({ dataType, geoData, b
               const centroid = turf.centroid(feature.geometry);
               const featurePoint = turf.point(centroid.geometry.coordinates);
               const distance = turf.distance(point, featurePoint, { units: "degrees" });
-              return distance < 0.002; // Radius pencarian
+              return distance < 0.002;
             } catch {
               console.error("generateStaticGrid: Error memeriksa jarak titik");
               return false;
@@ -266,7 +233,6 @@ const GenericHeatMapLayer: React.FC<HeatMapLayerProps> = ({ dataType, geoData, b
         validPoints++;
       });
 
-      console.log("generateStaticGrid: Jumlah titik valid yang digambar di kanvas:", validPoints);
       const newImageUrl = validPoints > 0 ? canvas.toDataURL() : null;
       return { imageUrl: newImageUrl, bbox };
     },
@@ -283,14 +249,9 @@ const GenericHeatMapLayer: React.FC<HeatMapLayerProps> = ({ dataType, geoData, b
 
   useEffect(() => {
     if (!map || !geoData || !boundaryData || isLoading) {
-      console.log("Melewati useEffect: Tidak ada map, geoData, boundaryData, atau sedang memuat");
       if (staticLayerRef.current) {
         map.removeLayer(staticLayerRef.current);
         staticLayerRef.current = null;
-      }
-      if (tooltipRef.current) {
-        tooltipRef.current.remove();
-        tooltipRef.current = null;
       }
       setImageUrl(null);
       setBounds(null);
@@ -298,150 +259,34 @@ const GenericHeatMapLayer: React.FC<HeatMapLayerProps> = ({ dataType, geoData, b
     }
 
     const { imageUrl: newImageUrl, bbox } = cachedGrid;
-    console.log("useEffect: Image URL dan bbox:", { newImageUrl, bbox });
 
     if (staticLayerRef.current) {
       map.removeLayer(staticLayerRef.current);
       staticLayerRef.current = null;
     }
-    if (tooltipRef.current) {
-      tooltipRef.current.remove();
-      tooltipRef.current = null;
-    }
 
     if (newImageUrl && Array.isArray(bbox) && bbox.length === 4 && bbox.every((val) => typeof val === "number" && !isNaN(val))) {
       const newBounds: L.LatLngBoundsExpression = [
-        [bbox[1], bbox[0]], // [latMin, lngMin]
-        [bbox[3], bbox[2]], // [latMax, lngMax]
+        [bbox[1], bbox[0]],
+        [bbox[3], bbox[2]],
       ];
       staticLayerRef.current = L.imageOverlay(newImageUrl, newBounds, { opacity: 0.85, interactive: true }).addTo(map);
-      console.log("useEffect: ImageOverlay ditambahkan ke peta");
       setImageUrl(newImageUrl);
       setBounds(L.latLngBounds(newBounds));
     } else {
-      console.warn("useEffect: imageUrl atau bbox tidak valid", { newImageUrl, bbox });
       setImageUrl(null);
       setBounds(null);
     }
 
-    const handleMouseMove = (e: L.LeafletMouseEvent) => {
-      if (inputRef.current && document.activeElement === inputRef.current) {
-        console.log("Melewati mousemove: Input pencarian sedang difokuskan");
-        return;
-      }
-      const { lat, lng } = e.latlng;
-      console.log("Kursor berpindah ke:", { lat, lng });
-
-      if (lastPosition.current && Math.abs(lastPosition.current.lat - lat) < 0.0001 && Math.abs(lastPosition.current.lng - lng) < 0.0001) {
-        console.log("Melewati mousemove: Posisi tidak berubah");
-        return;
-      }
-      lastPosition.current = { lat, lng };
-
-      try {
-        const point = turf.point([lng, lat]);
-        console.log("Membuat titik Turf:", point);
-
-        const buffer = 0.001;
-        const candidates =
-          spatialIndexRef.current?.search({
-            minX: lng - buffer,
-            minY: lat - buffer,
-            maxX: lng + buffer,
-            maxY: lat + buffer,
-          }) || [];
-        console.log("Kandidat indeks spasial:", candidates);
-
-        const kelurahan = boundaryData?.features.find((bf: BoundaryFeature, index: number) => {
-          if (!candidates.some((c: RBushItem) => c.featureIndex === index)) {
-            console.log(`Fitur ${index} tidak ada di kandidat`);
-            return false;
-          }
-          try {
-            const polygon = bf.geometry.type === "Polygon" ? turf.polygon(bf.geometry.coordinates) : turf.multiPolygon(bf.geometry.coordinates);
-            const isInside = turf.booleanPointInPolygon(point, polygon as GeoJSONTypes.Feature<GeoJSONTypes.Polygon | GeoJSONTypes.MultiPolygon>);
-            console.log(`Fitur ${index} (${bf.properties?.NAMOBJ || "Tidak ada nama"}): isInside = ${isInside}`);
-            return isInside;
-          } catch {
-            console.error(`Error memeriksa titik dalam poligon untuk fitur ${index}`);
-            return false;
-          }
-        });
-
-        const dataFeature = geoData?.features.find((feature: GeoJSONTypes.Feature<GeoJSONTypes.Point | GeoJSONTypes.Polygon | GeoJSONTypes.MultiPolygon, { aod_value?: number; pm25_value?: number }>) => {
-          if (!feature.geometry) {
-            console.log("handleMouseMove: Fitur tanpa geometri:", feature);
-            return false;
-          }
-          try {
-            if (feature.geometry.type === "Point") {
-              const featurePoint = turf.point(feature.geometry.coordinates);
-              const distance = turf.distance(point, featurePoint, { units: "degrees" });
-              return distance < 0.002; // Radius pencarian untuk Point
-            } else {
-              const isInside = turf.booleanPointInPolygon(point, feature.geometry);
-              return isInside;
-            }
-          } catch {
-            console.error("handleMouseMove: Error memeriksa titik");
-            return false;
-          }
-        });
-
-        console.log("Kelurahan ditemukan:", kelurahan);
-        console.log("DataFeature ditemukan:", dataFeature);
-
-        let value: number | null = null;
-        if (dataFeature) {
-          const rawValue = dataType === "aod" ? dataFeature.properties.aod_value : dataFeature.properties.pm25_value;
-          value = rawValue !== undefined && rawValue !== null ? rawValue : null;
-          console.log("Nilai diekstrak:", { rawValue, value });
-        }
-
-        const kelurahanName = kelurahan?.properties?.NAMOBJ || "Lokasi Tidak Dikenal";
-        const content = getTooltipContent(value, kelurahanName);
-        console.log("Mengatur tooltip:", { content, lat, lng });
-
-        if (tooltipRef.current) {
-          tooltipRef.current.remove();
-        }
-        tooltipRef.current = L.tooltip({
-          sticky: true,
-          direction: "top",
-          offset: [0, -20],
-          className: styles.customTooltip,
-        })
-          .setLatLng(e.latlng)
-          .setContent(content)
-          .addTo(map);
-        console.log("Tooltip ditambahkan ke peta");
-      } catch (error) {
-        console.error("Error dalam handleMouseMove:", error);
-        if (tooltipRef.current) {
-          tooltipRef.current.remove();
-          tooltipRef.current = null;
-        }
-      }
-    };
-
-    map.on("mousemove", handleMouseMove);
-    console.log("Menambahkan event listener mousemove");
-
     return () => {
-      map.off("mousemove", handleMouseMove);
-      if (tooltipRef.current) {
-        tooltipRef.current.remove();
-        tooltipRef.current = null;
-      }
       if (staticLayerRef.current) {
         map.removeLayer(staticLayerRef.current);
         staticLayerRef.current = null;
       }
       setImageUrl(null);
       setBounds(null);
-      console.log("Membersihkan event listener mousemove");
     };
-  }, [map, cachedGrid, selectedDate, inputRef, geoData, boundaryData, dataType, getTooltipContent, isLoading]);
+  }, [map, cachedGrid, geoData, boundaryData, isLoading]);
 
   return (
     <>
@@ -464,10 +309,6 @@ const GenericHeatMapLayer: React.FC<HeatMapLayerProps> = ({ dataType, geoData, b
           opacity={0.85}
           interactive={true}
           zIndex={1000}
-          eventHandlers={{
-            mouseover: () => console.log("Kursor di atas ImageOverlay"),
-            mousemove: () => console.log("Kursor bergerak di ImageOverlay"),
-          }}
         />
       )}
       <div className={`${styles.legend} z-[1000]`}>
@@ -479,4 +320,3 @@ const GenericHeatMapLayer: React.FC<HeatMapLayerProps> = ({ dataType, geoData, b
 };
 
 export default GenericHeatMapLayer;
-

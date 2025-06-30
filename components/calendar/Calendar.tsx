@@ -335,7 +335,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
         },
         {
           range: "300-500",
-          color: interpolatePM25Color(300),
+          color: interpolatePM25Color(500),
           label: "Berbahaya",
           desc: "Tingkat kualitas udara berbahaya yang secara umum dapat merugikan kesehatan yang serius pada populasi",
         },

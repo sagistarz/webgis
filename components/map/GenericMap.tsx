@@ -1,3 +1,4 @@
+// components/map/GenericMap.tsx
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -6,9 +7,10 @@ import "leaflet/dist/leaflet.css";
 import GenericHeatMapLayer from "@/components/map/GenericHeatMapLayer";
 import SearchBar from "@/components/aod/SearchBar";
 import { GeoJSONData, BoundaryGeoJSONData } from "@/app/types";
-import * as GeoJSONTypes from "geojson"; // Ganti nama impor untuk menghindari konflik
+import * as GeoJSONTypes from "geojson";
 import * as L from "leaflet";
 import { getBoundaryStyle } from "@/utils/map";
+import { interpolateColor, interpolatePM25Color } from "@/utils/color";
 
 // Definisi ikon kustom untuk marker
 const customIcon = L.icon({
@@ -18,7 +20,7 @@ const customIcon = L.icon({
   popupAnchor: [0, -38],
 });
 
-// Impor dinamis untuk komponen react-leaflet agar aman untuk SSR
+// Impor dinamis untuk komponen react-leaflet
 const MapContainer = dynamic(() => import("react-leaflet").then((mod) => mod.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then((mod) => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then((mod) => mod.Marker), { ssr: false });
@@ -35,6 +37,7 @@ interface GenericMapProps {
 const GenericMap: React.FC<GenericMapProps> = ({ dataType, fetchUrl, fetchByDateUrl, legendTitle }) => {
   const mapRef = useRef<L.Map | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const tooltipRef = useRef<L.Tooltip | null>(null); // Tambahkan ref untuk tooltip
   const [geoData, setGeoData] = useState<GeoJSONData | null>(null);
   const [boundaryData, setBoundaryData] = useState<BoundaryGeoJSONData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,6 +47,22 @@ const GenericMap: React.FC<GenericMapProps> = ({ dataType, fetchUrl, fetchByDate
 
   const updateMarker = (latlng: L.LatLng) => {
     setMarkerPosition(latlng);
+  };
+
+  const getTooltipContent = (value: number | null, kelurahanName: string): string => {
+    const formattedValue = value !== null && value > 0 ? (dataType === "aod" ? value.toFixed(4) : value.toFixed(2)) : "No data";
+    const color = value !== null && value > 0 ? (dataType === "aod" ? interpolateColor(value) : interpolatePM25Color(value)) : "#a0aec0";
+    const textColor = color === "rgba(0, 255, 0, 0.85)" || color === "rgba(255, 255, 0, 0.85)" ? "#000000" : "#ffffff";
+    return `
+      <div class="customTooltip">
+        <div class="kelurahanName">${kelurahanName}</div>
+        <div class="valueContainer">
+          <div class="valueCircle" style="background-color: ${color}; color: ${textColor}">
+            ${formattedValue} ${dataType === "aod" || formattedValue === "No data" ? "" : "µg/m³"}
+          </div>
+        </div>
+      </div>
+    `;
   };
 
   const fetchData = useCallback(
@@ -59,25 +78,39 @@ const GenericMap: React.FC<GenericMapProps> = ({ dataType, fetchUrl, fetchByDate
           body,
           cache: "no-store",
         });
-        if (!response.ok) throw new Error(`Failed to fetch ${dataType} data: ${response.status}`);
+
+        if (!response.ok) {
+          throw new Error("Tidak ditemukan data pada tanggal ini");
+        }
+
         const rawText = await response.text();
         const cleanText = rawText.replace(/NaN/g, "null");
         const data = JSON.parse(cleanText);
-        if (data.error) throw new Error(data.error || `Gagal memuat data ${dataType}`);
-        if (!data.features || !Array.isArray(data.features) || data.features.length === 0) {
-          throw new Error(`Data ${dataType} tidak tersedia atau kosong`);
+
+        if (data.error) {
+          throw new Error("Tidak ditemukan data pada tanggal ini");
         }
 
-        // Gunakan GeoJSONTypes.Feature alih-alih GeoJSON.Feature
-        const validFeatures = data.features.filter(
-          (f: GeoJSONTypes.Feature<GeoJSONTypes.Point, { aod_value?: number; pm25_value?: number }>) => {
-            const value = dataType === "aod" ? f.properties?.aod_value : f.properties?.pm25_value;
-            return f.geometry && value !== null && value !== undefined && !isNaN(value);
-          }
-        );
+        if (!data.features || !Array.isArray(data.features) || data.features.length === 0) {
+          throw new Error("Tidak ditemukan data pada tanggal ini");
+        }
+
+        const allZero = data.features.every((f: GeoJSONTypes.Feature<GeoJSONTypes.Point, { aod_value?: number; pm25_value?: number }>) => {
+          const value = dataType === "aod" ? f.properties?.aod_value : f.properties?.pm25_value;
+          return value === 0;
+        });
+
+        if (allZero) {
+          throw new Error("Data pada hari ini bernilai 0.0");
+        }
+
+        const validFeatures = data.features.filter((f: GeoJSONTypes.Feature<GeoJSONTypes.Point, { aod_value?: number; pm25_value?: number }>) => {
+          const value = dataType === "aod" ? f.properties?.aod_value : f.properties?.pm25_value;
+          return f.geometry && value !== null && value !== undefined && !isNaN(value);
+        });
 
         if (validFeatures.length === 0) {
-          throw new Error(`Data ${dataType} tidak memiliki fitur valid atau semua nilainya nol`);
+          throw new Error("Data pada hari ini bernilai 0.0");
         }
 
         setGeoData({ ...data, features: validFeatures });
@@ -97,7 +130,6 @@ const GenericMap: React.FC<GenericMapProps> = ({ dataType, fetchUrl, fetchByDate
         const [, boundary] = await Promise.all([fetchData(fetchUrl), fetch("/data/batas_kelurahan_jakarta.geojson", { cache: "no-store" })]);
         if (!boundary.ok) throw new Error(`Failed to fetch boundary data: ${boundary.status}`);
         const boundaryData = await boundary.json();
-        console.log("boundaryData structure:", JSON.stringify(boundaryData, null, 2));
         setBoundaryData(boundaryData);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Terjadi kesalahan");
@@ -139,12 +171,6 @@ const GenericMap: React.FC<GenericMapProps> = ({ dataType, fetchUrl, fetchByDate
       {error && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1000] bg-red-100 text-red-600 p-4 rounded-md shadow-md flex items-center gap-4">
           <span>{error}</span>
-          {/* <button onClick={() => fetchData(fetchUrl)} className="bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600">
-            Coba Lagi
-          </button>
-          <button onClick={() => setError(null)} className="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600">
-            Tutup
-          </button> */}
         </div>
       )}
       <MapContainer
@@ -176,16 +202,56 @@ const GenericMap: React.FC<GenericMapProps> = ({ dataType, fetchUrl, fetchByDate
             style={getBoundaryStyle}
             onEachFeature={(feature, layer: L.GeoJSON) => {
               layer.on({
-                mouseover: () => {
+                mouseover: (e: L.LeafletMouseEvent) => {
                   layer.setStyle({
                     weight: 1.2,
                     color: "#1a4971",
                     fillOpacity: 0.1,
                   });
                   layer.bringToFront();
+
+                  // Cari data yang sesuai dengan wilayah
+                  const dataFeature = geoData?.features.find((f: GeoJSONTypes.Feature) => {
+                    if (!f.geometry) return false;
+                    try {
+                      const point = L.latLng(e.latlng);
+                      const isInside = L.geoJSON(f.geometry).getBounds().contains(point);
+                      return isInside;
+                    } catch {
+                      return false;
+                    }
+                  });
+
+                  const value = dataFeature
+                    ? dataType === "aod"
+                      ? dataFeature.properties.aod_value
+                      : dataFeature.properties.pm25_value
+                    : null;
+                  const kelurahanName = feature.properties?.NAMOBJ || "Lokasi Tidak Dikenal";
+
+                  // Hapus tooltip sebelumnya
+                  if (tooltipRef.current) {
+                    tooltipRef.current.remove();
+                    tooltipRef.current = null;
+                  }
+
+                  // Buat tooltip baru
+                  tooltipRef.current = L.tooltip({
+                    sticky: true,
+                    direction: "top",
+                    offset: [0, -20],
+                    className: "customTooltip",
+                  })
+                    .setLatLng(e.latlng)
+                    .setContent(getTooltipContent(value, kelurahanName))
+                    .addTo(mapRef.current!);
                 },
                 mouseout: () => {
                   layer.setStyle(getBoundaryStyle());
+                  if (tooltipRef.current) {
+                    tooltipRef.current.remove();
+                    tooltipRef.current = null;
+                  }
                 },
               });
             }}
