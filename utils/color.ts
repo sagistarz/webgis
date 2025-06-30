@@ -76,11 +76,11 @@ export const interpolatePM25Color = (value: number | null): string => {
 
   // Rentang dan warna
   const ranges = [
-    { max: 50, r: 0, g: 204, b: 0 }, // Hijau
-    { max: 100, r: 1, g: 51, b: 255 }, // Biru
-    { max: 199, r: 255, g: 201, b: 0 }, // Kuning
-    { max: 299, r: 255, g: 0, b: 0 }, // Merah
-    { max: 500, r: 34, g: 34, b: 34 }, // Hitam
+    { max: 0, r: 0, g: 204, b: 0 }, // Hijau
+    { max: 51, r: 1, g: 51, b: 255 }, // Biru
+    { max: 101, r: 255, g: 201, b: 0 }, // Kuning
+    { max: 200, r: 255, g: 0, b: 0 }, // Merah
+    { max: 300, r: 34, g: 34, b: 34 }, // Hitam
   ];
 
   // Cari rentang yang sesuai
