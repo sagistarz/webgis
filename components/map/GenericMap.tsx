@@ -224,8 +224,8 @@ const GenericMap: React.FC<GenericMapProps> = ({ dataType, fetchUrl, fetchByDate
 
                   const value = dataFeature
                     ? dataType === "aod"
-                      ? dataFeature.properties.aod_value
-                      : dataFeature.properties.pm25_value
+                      ? dataFeature.properties.aod_value ?? null
+                      : dataFeature.properties.pm25_value ?? null
                     : null;
                   const kelurahanName = feature.properties?.NAMOBJ || "Lokasi Tidak Dikenal";
 
