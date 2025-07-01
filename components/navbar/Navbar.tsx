@@ -41,7 +41,7 @@ const Navbar = () => {
         </div>
 
         <Link href="/calendar" className={`${styles.navLink} ${pathname === "/calendar" ? styles.active : ""}`}>
-          Kalender
+          Kalendar
         </Link>
       </div>
     </div>

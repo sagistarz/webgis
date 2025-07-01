@@ -22,7 +22,7 @@ const Calendar = dynamic(() => import("@/components/calendar/Calendar"), {
   loading: () => (
     <div className="h-full w-full flex items-center justify-center">
       <div className={styles.spinner}></div>
-      <span style={{ color: 'black' }}>Memuat kalender...</span>
+      <span style={{ color: "black" }}>Memuat kalender...</span>
     </div>
   ),
 });
@@ -335,7 +335,7 @@ const StasiunPM25 = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="flex flex-col items-center gap-4">
           <div className={styles.spinner}></div>
-          <span style={{ color: 'black' }}>Memuat peta...</span>
+          <span style={{ color: "black" }}>Memuat peta...</span>
         </div>
       </div>
     );
@@ -346,7 +346,7 @@ const StasiunPM25 = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="flex flex-col items-center gap-4">
           <div className={styles.spinner}></div>
-          <span style={{ color: 'black' }}>Memuat data stasiun...</span>
+          <span style={{ color: "black" }}>Memuat data stasiun...</span>
         </div>
       </div>
     );
@@ -375,23 +375,23 @@ const StasiunPM25 = () => {
             <div className={styles.legend}>
               <h4>Indikator PM2.5 (µg/m³)</h4>
               <div className={styles.legendItem}>
-                <span className={styles.legendColor} style={{ backgroundColor: 'rgba(0, 204, 0, 0.7)' }} />
+                <img src="/images/indikator_baik.png" alt="Baik" className={styles.legendIcon} />
                 <span>Baik (0 - 50)</span>
               </div>
               <div className={styles.legendItem}>
-                <span className={styles.legendColor} style={{ backgroundColor: 'rgba(1, 51, 255, 0.7)' }} />
+                <img src="/images/indikator_sedang.png" alt="Sedang" className={styles.legendIcon} />
                 <span>Sedang (51 - 100)</span>
               </div>
               <div className={styles.legendItem}>
-                <span className={styles.legendColor} style={{ backgroundColor: 'rgba(255, 201, 0, 0.7)' }} />
+                <img src="/images/indikator_tidak_sehat.png" alt="Tidak Sehat" className={styles.legendIcon} />
                 <span>Tidak Sehat (101 - 199)</span>
               </div>
               <div className={styles.legendItem}>
-                <span className={styles.legendColor} style={{ backgroundColor: 'rgba(255, 0, 0, 0.7)' }} />
+                <img src="/images/indikator_sangat_tidak_sehat.png" alt="Sangat Tidak Sehat" className={styles.legendIcon} />
                 <span>Sangat Tidak Sehat (200 - 299)</span>
               </div>
               <div className={styles.legendItem}>
-                <span className={styles.legendColor} style={{ backgroundColor: 'rgba(34, 34, 34, 0.7)' }} />
+                <img src="/images/indikator_berbahaya.png" alt="Berbahaya" className={styles.legendIcon} />
                 <span>Berbahaya (&gt;300)</span>
               </div>
             </div>
