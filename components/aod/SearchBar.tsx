@@ -6,15 +6,15 @@ import * as L from "leaflet";
 import styles from "@/styles/searchbar.module.css";
 
 interface GeoSearchResult {
-  x: number; // Longitude
-  y: number; // Latitude
+  x: number; // long
+  y: number; // lat
   label: string;
   bounds: [number, number][] | null;
 }
 
 interface SearchResult {
-  x: number; // Longitude
-  y: number; // Latitude
+  x: number; // long
+  y: number; // lat
   label: string;
   bounds: L.LatLngBounds | null;
 }
