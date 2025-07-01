@@ -82,6 +82,10 @@
   gap: 1rem;
 }
 
+.spinnerOverlay span {
+  color: black; /* Atur warna teks jadi hitam */
+}
+
 .spinner {
   border: 4px solid rgba(0, 0, 0, 0.1);
   border-left-color: #2563eb;
@@ -89,12 +93,8 @@
   width: 2rem;
   height: 2rem;
   animation: spin 1s linear infinite;
-  
 }
 
-.spinner span{
-  color: black;
-}
 
 .customTooltip {
   background: white;
@@ -109,19 +109,6 @@
   font-size: 14px;
   color: #374151;
   margin-bottom: 0.25rem;
-}
-
-.valueContainer {
-  display: flex;
-  justify-content: center;
-  margin-top: 0.25rem;
-}
-
-.valueCircle {
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 12px;
 }
 
 .gradientLegend {
@@ -190,9 +177,43 @@
 .valueContainer {
   display: flex;
   justify-content: center;
+  margin-top: 0.25rem;
 }
 .valueCircle {
   padding: 0.25rem 0.5rem;
   border-radius: 12px;
   font-size: 0.9rem;
+  text-align: center;
+  font-weight: bold;
+}
+
+.customTooltip {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0;
+}
+
+.kelurahanName {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000000;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.valueContainer {
+  display: flex;
+  justify-content: center;
+}
+
+.valueCircle {
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+  min-width: 60px; /* Pastikan lebar minimum sama */
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5); /* Tambah shadow untuk kontras */
 }

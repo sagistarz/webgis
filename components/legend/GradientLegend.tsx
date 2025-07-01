@@ -130,22 +130,6 @@ const GradientLegend: React.FC<GradientLegendProps> = ({ dataType }) => {
       <div className={styles.legendLabels}>
         {dataType === 'aod' ? (
           <>
-            <div className={styles.legendItem}>
-              <span className={styles.legendColor} style={{ backgroundColor: 'rgba(0, 255, 0, 0.85)' }} />
-              <span>Rendah (0 - 0.3)</span>
-            </div>
-            <div className={styles.legendItem}>
-              <span className={styles.legendColor} style={{ backgroundColor: 'rgba(255, 255, 0, 0.85)' }} />
-              <span>Sedang (0.3 - 0.5)</span>
-            </div>
-            <div className={styles.legendItem}>
-              <span className={styles.legendColor} style={{ backgroundColor: 'rgba(255, 165, 0, 0.85)' }} />
-              <span>Tinggi (0.5 - 0.7)</span>
-            </div>
-            <div className={styles.legendItem}>
-              <span className={styles.legendColor} style={{ backgroundColor: 'rgba(255, 0, 0, 0.85)' }} />
-              <span>Sangat Tinggi (&gt; 1.0)</span>
-            </div>
           </>
         ) : (
           <>

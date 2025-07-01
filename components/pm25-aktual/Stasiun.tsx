@@ -5,12 +5,11 @@ import dynamic from "next/dynamic";
 import Navbar from "@/components/navbar/Navbar";
 import styles from "../../styles/pm25act.module.css";
 import { FiChevronRight } from "react-icons/fi";
-import { interpolatePM25Color } from "@/utils/color";
+import { getStaticPM25Color } from "@/utils/color";
 import { BoundaryGeoJSONData, StationData, WeatherData } from "@/app/types";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getBoundaryStyle } from "@/utils/map";
-import GradientLegend from "../legend/GradientLegend";
 
 const MapContainer = dynamic(() => import("react-leaflet").then((mod) => mod.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then((mod) => mod.TileLayer), { ssr: false });
@@ -23,7 +22,7 @@ const Calendar = dynamic(() => import("@/components/calendar/Calendar"), {
   loading: () => (
     <div className="h-full w-full flex items-center justify-center">
       <div className={styles.spinner}></div>
-      <span>Memuat kalender...</span>
+      <span style={{ color: 'black' }}>Memuat kalender...</span>
     </div>
   ),
 });
@@ -91,7 +90,7 @@ const MapComponent = React.memo(
                 <Popup>
                   <div className="font-bold">Stasiun: {station.station_name}</div>
                   <div className="font-bold">PM2.5: {station.pm25_value !== null && !isNaN(station.pm25_value) ? station.pm25_value.toFixed(2) : "Tidak tersedia"}</div>
-                  <div className="text-white font-semibold px-2 py-1 rounded mt-1 mb-1 inline-block" style={{ backgroundColor: interpolatePM25Color(station.pm25_value) }}>
+                  <div className="text-white font-semibold px-2 py-1 rounded mt-1 mb-1 inline-block" style={{ backgroundColor: getStaticPM25Color(station.pm25_value) }}>
                     {station.pm25_value === null || isNaN(station.pm25_value)
                       ? "Kualitas: Tidak tersedia"
                       : station.pm25_value <= 50
@@ -336,7 +335,7 @@ const StasiunPM25 = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="flex flex-col items-center gap-4">
           <div className={styles.spinner}></div>
-          <span className="text-lg font-medium text-gray-700">Memuat peta...</span>
+          <span style={{ color: 'black' }}>Memuat peta...</span>
         </div>
       </div>
     );
@@ -347,7 +346,7 @@ const StasiunPM25 = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="flex flex-col items-center gap-4">
           <div className={styles.spinner}></div>
-          <span className="text-lg font-medium text-gray-700">Memuat data stasiun...</span>
+          <span style={{ color: 'black' }}>Memuat data stasiun...</span>
         </div>
       </div>
     );
@@ -375,7 +374,26 @@ const StasiunPM25 = () => {
             {memoizedMap}
             <div className={styles.legend}>
               <h4>Indikator PM2.5 (µg/m³)</h4>
-              <GradientLegend dataType="pm25-est" />
+              <div className={styles.legendItem}>
+                <span className={styles.legendColor} style={{ backgroundColor: 'rgba(0, 204, 0, 0.7)' }} />
+                <span>Baik (0 - 50)</span>
+              </div>
+              <div className={styles.legendItem}>
+                <span className={styles.legendColor} style={{ backgroundColor: 'rgba(1, 51, 255, 0.7)' }} />
+                <span>Sedang (51 - 100)</span>
+              </div>
+              <div className={styles.legendItem}>
+                <span className={styles.legendColor} style={{ backgroundColor: 'rgba(255, 201, 0, 0.7)' }} />
+                <span>Tidak Sehat (101 - 199)</span>
+              </div>
+              <div className={styles.legendItem}>
+                <span className={styles.legendColor} style={{ backgroundColor: 'rgba(255, 0, 0, 0.7)' }} />
+                <span>Sangat Tidak Sehat (200 - 299)</span>
+              </div>
+              <div className={styles.legendItem}>
+                <span className={styles.legendColor} style={{ backgroundColor: 'rgba(34, 34, 34, 0.7)' }} />
+                <span>Berbahaya (&gt;300)</span>
+              </div>
             </div>
           </div>
           {isSplitView && selectedStation && (

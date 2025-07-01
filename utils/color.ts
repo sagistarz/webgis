@@ -1,39 +1,3 @@
-// export const interpolateColor = (value: number): string => {
-//   const opacity = 0.85;
-//   if (value <= 0.1) {
-//     return `rgba(0, 255, 0, ${opacity})`;
-//   } else if (value <= 0.2) {
-//     const ratio = (value - 0.1) / 0.1;
-//     const r = Math.round(255 * ratio);
-//     const g = 255;
-//     return `rgba(${r}, ${g}, 0, ${opacity})`;
-//   } else if (value <= 0.3) {
-//     const ratio = (value - 0.2) / 0.1;
-//     const r = 255;
-//     const g = Math.round(255 - 165 * ratio);
-//     return `rgba(${r}, ${g}, 0, ${opacity})`;
-//   } else {
-//     return `rgba(255, 0, 0, ${opacity})`;
-//   }
-// };
-
-// export const interpolatePM25Color = (value: number | null): string => {
-//   const opacity = 0.85;
-//   if (value === null || isNaN(value)) {
-//     return `rgba(160, 174, 192, ${opacity})`; // Warna abu-abu untuk data tidak tersedia
-//   }
-//   if (value <= 50) {
-//     return `rgba(0, 204, 0, ${opacity})`; // Baik
-//   } else if (value <= 100) {
-//     return `rgba(1, 51, 255, ${opacity})`; // Sedang
-//   } else if (value <= 199) {
-//     return `rgba(255, 201, 0, ${opacity})`; // Tidak Sehat
-//   } else if (value <= 299) {
-//     return `rgba(255, 0, 0, ${opacity})`; // Sangat Tidak Sehat
-//   } else {
-//     return `rgba(34, 34, 34, ${opacity})`; // Berbahaya
-//   }
-// };
 
 export const interpolateColor = (value: number): string => {
   const opacity = 0.85;
@@ -98,4 +62,16 @@ export const interpolatePM25Color = (value: number | null): string => {
 
   // Default untuk nilai <= 50
   return `rgba(0, 204, 0, ${opacity})`;
+};
+
+export const getStaticPM25Color = (value: number | null): string => {
+  const opacity = 0.7;
+  if (value === null || isNaN(value)) {
+    return `rgba(160, 174, 192, ${opacity})`; // Abu-abu untuk data tidak tersedia
+  }
+  if (value <= 50) return `rgba(0, 204, 0, ${opacity})`; // Baik: #00CC00
+  if (value <= 100) return `rgba(1, 51, 255, ${opacity})`; // Sedang: #0133FF
+  if (value <= 199) return `rgba(255, 201, 0, ${opacity})`; // Tidak Sehat: #FFC900
+  if (value <= 299) return `rgba(255, 0, 0, ${opacity})`; // Sangat Tidak Sehat: #FF0000
+  return `rgba(34, 34, 34, ${opacity})`; // Berbahaya: #222222
 };

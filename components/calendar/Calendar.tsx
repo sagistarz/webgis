@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "@/styles/calendar.module.css";
 import Image from "next/image";
-import { interpolatePM25Color } from "@/utils/color";
+import { getStaticPM25Color } from "@/utils/color";
 
 interface PM25Data {
   id: number;
@@ -35,7 +35,6 @@ interface CalendarProps {
   onStationChange?: (stationName: string) => void;
 }
 
-// Fungsi utilitas didefinisikan di luar komponen untuk menghindari masalah hoisting
 function getDaysInMonth(month: number, year: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
@@ -269,7 +268,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
         <div className={styles.qualityBox}>
           <div className="flex items-center justify-center gap-4">
             <div className={styles.spinner}></div>
-            <span>Memuat data PM2.5...</span>
+            <span style={{ color: 'black' }}>Memuat data PM2.5...</span>
           </div>
         </div>
       );
@@ -311,31 +310,31 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
       {[
         {
           range: "0-50",
-          color: interpolatePM25Color(50),
+          color: getStaticPM25Color(50),
           label: "Baik",
           desc: "Tingkat kualitas udara yang tidak memberikan efek bagi kesehatan manusia atau hewan dan tidak berpengaruh pada tumbuhan, bangunan ataupun nilai estetika",
         },
         {
           range: "51-100",
-          color: interpolatePM25Color(100),
+          color: getStaticPM25Color(100),
           label: "Sedang",
           desc: "Tingkat kualitas udara yang tidak berpengaruh pada kesehatan manusia ataupun hewan tetapi berpengaruh pada tumbuhan yang sensitif, dan nilai estetika",
         },
         {
           range: "101-199",
-          color: interpolatePM25Color(199),
+          color: getStaticPM25Color(199),
           label: "Tidak Sehat",
           desc: "Tingkat kualitas udara yang bersifat merugikan pada manusia ataupun kelompok hewan yang sensitif atau bisa menimbulkan kerusakan pada tumbuhan ataupun nilai estetika",
         },
         {
           range: "200-299",
-          color: interpolatePM25Color(299),
+          color: getStaticPM25Color(299),
           label: "Sangat Tidak Sehat",
           desc: "Tingkat kualitas udara yang dapat merugikan kesehatan pada sejumlah segmen populasi yang terpapar",
         },
         {
           range: "300-500",
-          color: interpolatePM25Color(500),
+          color: getStaticPM25Color(500),
           label: "Berbahaya",
           desc: "Tingkat kualitas udara berbahaya yang secara umum dapat merugikan kesehatan yang serius pada populasi",
         },
@@ -372,7 +371,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
               <td colSpan={5} className={styles.loadingRow}>
                 <div className="flex items-center justify-center gap-4">
                   <div className={styles.spinner}></div>
-                  <span>Memuat data cuaca...</span>
+                  <span style={{ color: 'black' }}>Memuat data cuaca...</span>
                 </div>
               </td>
             </tr>
@@ -443,7 +442,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
             {isLoading ? (
               <div className="text-center py-8 flex items-center justify-center gap-4">
                 <div className={styles.spinner}></div>
-                <span>Memuat data PM2.5...</span>
+                <span style={{ color: 'black' }}>Memuat data PM2.5...</span>
               </div>
             ) : error ? (
               <div className="text-center py-8 text-red-500">
@@ -475,7 +474,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
                           <div
                             className={styles.indikatorPM}
                             style={{
-                              backgroundColor: interpolatePM25Color(dayData.pm25),
+                              backgroundColor: getStaticPM25Color(dayData.pm25),
                             }}
                           >
                             <span className={styles.pmValue}>{dayData.pm25 !== null ? Math.round(dayData.pm25) : "-"}</span>
@@ -497,6 +496,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
               <div className={styles.activityRec}>
                 <b>Kegiatan yang direkomendasikan</b>
                 <p>{getActivityRecommendation(selectedPMValue)}</p>
+                <p style={{ fontSize: "12px", marginTop: "8px" }}>Sumber: udara.jakarta.go.id</p>
               </div>
             </div>
             {renderLegend()}

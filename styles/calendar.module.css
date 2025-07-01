@@ -3,6 +3,7 @@
   font-family: sans-serif;
   background-color: #f0f6ec;
   color: black;
+  margin-top: 20px;
 }
 
 .searchBar {
@@ -650,4 +651,11 @@
     grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 4px;
   }
+}
+
+.activityRec {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 16px; /* Pertahankan margin-top jika sudah ada */
 }
