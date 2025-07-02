@@ -65,7 +65,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
           const provider = new OpenStreetMapProvider();
           const results: GeoSearchResult[] = await provider.search({ query: `${query}, Jakarta, Indonesia` });
           if (results.length === 0) {
-            setError("Tidak ada hasil ditemukan");
+            setError("Tidak ada hasil yang ditemukan");
             setSearchResults([]);
             return;
           }
@@ -147,7 +147,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
                     };
                     handleSearchSelect(formattedResult);
                   } else {
-                    setError("Tidak ada hasil ditemukan");
+                    setError("Tidak ada hasil yang ditemukan");
                   }
                 })
                 .catch((err) => {
