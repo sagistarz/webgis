@@ -16,9 +16,25 @@ const Navbar = () => {
     setIsDropdownOpen(false);
   };
 
+  // Pemetaan pathname ke judul
+  const getTitle = (path: string) => {
+    switch (path) {
+      case "/":
+        return "AOD";
+      case "/pm25-estimasi":
+        return "PM2.5 (Estimasi)";
+      case "/pm25-aktual":
+        return "PM2.5 (Aktual)";
+      case "/calendar":
+        return "Kalendar";
+      default:
+        return "PM2.5"; // Default jika pathname tidak dikenali
+    }
+  };
+
   return (
     <div className={styles.navbar}>
-      <div className={styles.left}>PM2.5</div>
+      <div className={styles.left}>{getTitle(pathname)}</div>
 
       <div className={styles.center}>
         <div className={styles.dropdown}>
@@ -31,10 +47,10 @@ const Navbar = () => {
                 AOD
               </Link>
               <Link href="/pm25-estimasi" className={`${styles.dropdownItem} ${pathname === "/pm25-estimasi" ? styles.active : ""}`} onClick={closeDropdown}>
-                PM25 (Estimasi)
+                PM2.5 (Estimasi)
               </Link>
               <Link href="/pm25-aktual" className={`${styles.dropdownItem} ${pathname === "/pm25-aktual" ? styles.active : ""}`} onClick={closeDropdown}>
-                PM25 (Aktual)
+                PM2.5 (Aktual)
               </Link>
             </div>
           )}

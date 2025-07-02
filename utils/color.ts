@@ -1,3 +1,37 @@
+// export const interpolateColor = (value: number): string => {
+//   // Rentang untuk AOD: 0 hingga 4
+//   const normalized = Math.min(Math.max(value, 0), 4) / 4; // Normalisasi ke 0-1
+
+//   // Definisi warna mejikuhibiniu (terbalik: ungu untuk 0, merah untuk 4)
+//   const colors = [
+//     { r: 128, g: 0, b: 128, a: 0.85 }, // Ungu (#800080)
+//     { r: 75, g: 0, b: 130, a: 0.85 },  // Nila (#4B0082)
+//     { r: 0, g: 0, b: 255, a: 0.85 },   // Biru (#0000FF)
+//     { r: 0, g: 128, b: 0, a: 0.85 },   // Hijau (#008000)
+//     { r: 255, g: 255, b: 0, a: 0.85 }, // Kuning (#FFFF00)
+//     { r: 255, g: 165, b: 0, a: 0.85 }, // Jingga (#FFA500)
+//     { r: 255, g: 0, b: 0, a: 0.85 },   // Merah (#FF0000)
+//   ];
+
+//   const steps = colors.length - 1;
+//   const step = 1 / steps;
+//   const index = Math.floor(normalized * steps);
+//   const fraction = (normalized - index * step) / step;
+
+//   if (index >= steps) {
+//     const c = colors[steps];
+//     return `rgba(${c.r}, ${c.g}, ${c.b}, ${c.a})`;
+//   }
+
+//   const c1 = colors[index];
+//   const c2 = colors[index + 1];
+
+//   const r = Math.round(c1.r + (c2.r - c1.r) * fraction);
+//   const g = Math.round(c1.g + (c2.g - c1.g) * fraction);
+//   const b = Math.round(c1.b + (c2.b - c1.b) * fraction);
+
+//   return `rgba(${r}, ${g}, ${b}, ${c1.a})`;
+// };
 
 export const interpolateColor = (value: number): string => {
   const opacity = 0.85;

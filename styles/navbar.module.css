@@ -29,7 +29,7 @@
 .navLink {
   background: none;
   border: none;
-  color: #c5c5c5;
+  color: rgb(53, 54, 54);
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
@@ -62,12 +62,13 @@
   min-width: 160px;
   display: flex;
   flex-direction: column;
+  
 }
 
 .dropdownItem {
   padding: 10px 16px;
   font-size: 14px;
-  color: #c5c5c5;
+  color: rgb(53, 54, 54);
   text-decoration: none;
   transition: background-color 0.2s, color 0.2s;
 }
