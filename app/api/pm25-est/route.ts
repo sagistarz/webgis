@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const apiUrl = process.env.API_BASE_URL
-      ? `${process.env.API_BASE_URL}/api1/get-data-pm25/`
-      : "http://127.0.0.1:8000/api1/get-data-pm25/";
+    const apiUrl = process.env.API_BASE_URL ? `${process.env.API_BASE_URL}/api1/get-data-pm25/` : "http://127.0.0.1:8000/api1/get-data-pm25/";
 
     const response = await fetch(apiUrl, {
       headers: {
@@ -33,7 +31,7 @@ export async function GET() {
     console.error("PM25 Proxy error:", error);
     return NextResponse.json(
       {
-        error: "Failed to fetch PM25 data",
+        error: "Gagal memuat data PM2.5",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }

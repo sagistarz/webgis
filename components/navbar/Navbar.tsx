@@ -16,7 +16,7 @@ const Navbar = () => {
     setIsDropdownOpen(false);
   };
 
-  // Pemetaan pathname ke judul
+ 
   const getTitle = (path: string) => {
     switch (path) {
       case "/":
@@ -28,7 +28,7 @@ const Navbar = () => {
       case "/calendar":
         return "Kalendar";
       default:
-        return "PM2.5"; // Default jika pathname tidak dikenali
+        return "WebGIS PM2.5 dan AOD"; 
     }
   };
 

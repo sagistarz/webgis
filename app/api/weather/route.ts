@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const apiUrl = process.env.API_BASE_URL
-      ? `${process.env.API_BASE_URL}/api2/weather/weatherdata-now/`
-      : "http://127.0.0.1:8000/api2/weather/weatherdata-now/";
+    const apiUrl = process.env.API_BASE_URL ? `${process.env.API_BASE_URL}/api2/weather/weatherdata-now/` : "http://127.0.0.1:8000/api2/weather/weatherdata-now/";
 
     const response = await fetch(apiUrl, {
       headers: {
@@ -33,7 +31,7 @@ export async function GET() {
     console.error("Weather Proxy error:", error);
     return NextResponse.json(
       {
-        error: "Failed to fetch weather data",
+        error: "Gagal memuat data cuaca",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }

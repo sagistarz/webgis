@@ -7,9 +7,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Date is required" }, { status: 400 });
     }
 
-    const apiUrl = process.env.API_BASE_URL
-      ? `${process.env.API_BASE_URL}/api2/weather/weatherdatabydate/`
-      : "http://127.0.0.1:8000/api2/weather/weatherdatabydate/";
+    const apiUrl = process.env.API_BASE_URL ? `${process.env.API_BASE_URL}/api2/weather/weatherdatabydate/` : "http://127.0.0.1:8000/api2/weather/weatherdatabydate/";
 
     const response = await fetch(apiUrl, {
       method: "POST",
@@ -40,7 +38,7 @@ export async function POST(request: Request) {
     console.error("Weather History Proxy error:", error);
     return NextResponse.json(
       {
-        error: "Failed to fetch weather history data",
+        error: "Gagal memuat data historis cuaca",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }

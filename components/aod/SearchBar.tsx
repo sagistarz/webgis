@@ -4,6 +4,8 @@ import React, { useRef, useState, useEffect } from "react";
 import { OpenStreetMapProvider } from "leaflet-geosearch";
 import * as L from "leaflet";
 import styles from "@/styles/searchbar.module.css";
+import { BoundaryGeoJSONData } from "@/app/types";
+import * as turf from "@turf/turf";
 
 interface GeoSearchResult {
   x: number; // long
@@ -22,9 +24,11 @@ interface SearchResult {
 interface SearchBarProps {
   updateMarker: (latlng: L.LatLng) => void;
   mapRef: React.MutableRefObject<L.Map | null>;
+  boundaryData: BoundaryGeoJSONData | null;
+  resetMap: () => void;
 }
 
-const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
+const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef, boundaryData, resetMap }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -52,6 +56,18 @@ const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
     }
   }, []);
 
+  const isPointInJakarta = (lat: number, lng: number): boolean => {
+    if (!boundaryData || !boundaryData.features) return false;
+    const point = turf.point([lng, lat]);
+    return boundaryData.features.some((feature) => {
+      try {
+        return turf.booleanPointInPolygon(point, feature.geometry);
+      } catch {
+        return false;
+      }
+    });
+  };
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchQuery(query);
@@ -65,21 +81,29 @@ const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
           const provider = new OpenStreetMapProvider();
           const results: GeoSearchResult[] = await provider.search({ query: `${query}, Jakarta, Indonesia` });
           if (results.length === 0) {
-            setError("Tidak ada hasil yang ditemukan");
+            setError("Tidak ada hasil yang ditemukan di Jakarta");
             setSearchResults([]);
             return;
           }
-          const formattedResults: SearchResult[] = results.slice(0, 5).map((result: GeoSearchResult) => ({
-            x: result.x,
-            y: result.y,
-            label: result.label,
-            bounds: result.bounds
-              ? L.latLngBounds([
-                  [result.bounds[0][0], result.bounds[0][1]],
-                  [result.bounds[1][0], result.bounds[1][1]],
-                ])
-              : null,
-          }));
+          const formattedResults: SearchResult[] = results
+            .filter((result) => isPointInJakarta(result.y, result.x))
+            .slice(0, 5)
+            .map((result: GeoSearchResult) => ({
+              x: result.x,
+              y: result.y,
+              label: result.label,
+              bounds: result.bounds
+                ? L.latLngBounds([
+                    [result.bounds[0][0], result.bounds[0][1]],
+                    [result.bounds[1][0], result.bounds[1][1]],
+                  ])
+                : null,
+            }));
+          if (formattedResults.length === 0) {
+            setError("Tidak ada hasil yang ditemukan di wilayah Jakarta");
+            setSearchResults([]);
+            return;
+          }
           setSearchResults(formattedResults);
         } catch (error) {
           console.error("Search error:", error);
@@ -101,6 +125,13 @@ const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
       updateMarker(latlng);
       mapRef.current.setView([result.y, result.x], 15);
     }
+  };
+
+  const handleReset = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setError(null);
+    resetMap();
   };
 
   return (
@@ -133,21 +164,22 @@ const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
               provider
                 .search({ query: `${searchQuery}, Jakarta, Indonesia` })
                 .then((results: GeoSearchResult[]) => {
-                  if (results.length > 0) {
+                  const validResults = results.filter((result) => isPointInJakarta(result.y, result.x));
+                  if (validResults.length > 0) {
                     const formattedResult: SearchResult = {
-                      x: results[0].x,
-                      y: results[0].y,
-                      label: results[0].label,
-                      bounds: results[0].bounds
+                      x: validResults[0].x,
+                      y: validResults[0].y,
+                      label: validResults[0].label,
+                      bounds: validResults[0].bounds
                         ? L.latLngBounds([
-                            [results[0].bounds[0][0], results[0].bounds[0][1]],
-                            [results[0].bounds[1][0], results[0].bounds[1][1]],
+                            [validResults[0].bounds[0][0], validResults[0].bounds[0][1]],
+                            [validResults[0].bounds[1][0], validResults[0].bounds[1][1]],
                           ])
                         : null,
                     };
                     handleSearchSelect(formattedResult);
                   } else {
-                    setError("Tidak ada hasil yang ditemukan");
+                    setError("Lokasi tidak ada di wilayah Jakarta");
                   }
                 })
                 .catch((err) => {
@@ -160,6 +192,12 @@ const SearchBar: React.FC<SearchBarProps> = ({ updateMarker, mapRef }) => {
           Cari
         </button>
       </div>
+      <button
+        className={`${styles.searchButton} mt-2`}
+        onClick={handleReset}
+      >
+        Reset
+      </button>
       {error && <div className={styles.searchError}>{error}</div>}
       {searchResults.length > 0 && (
         <div className={styles.searchResults}>

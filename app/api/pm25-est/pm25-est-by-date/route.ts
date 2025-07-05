@@ -7,9 +7,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Tanggal is required" }, { status: 400 });
     }
 
-    const apiUrl = process.env.API_BASE_URL
-      ? `${process.env.API_BASE_URL}/api1/get-data-pm25bydate/`
-      : "http://127.0.0.1:8000/api1/get-data-pm25bydate/";
+    const apiUrl = process.env.API_BASE_URL ? `${process.env.API_BASE_URL}/api1/get-data-pm25bydate/` : "http://127.0.0.1:8000/api1/get-data-pm25bydate/";
 
     const response = await fetch(apiUrl, {
       method: "POST",
@@ -40,7 +38,7 @@ export async function POST(request: Request) {
     console.error("PM25 History Proxy error:", error);
     return NextResponse.json(
       {
-        error: "Failed to fetch PM25 history data",
+        error: "Gagal memuat data historis PM2.5 ",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }

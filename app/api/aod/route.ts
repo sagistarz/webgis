@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const apiUrl = process.env.API_BASE_URL
-      ? `${process.env.API_BASE_URL}/api1/get-data-aod/`
-      : "http://127.0.0.1:8000/api1/get-data-aod/";
+    const apiUrl = process.env.API_BASE_URL ? `${process.env.API_BASE_URL}/api1/get-data-aod/` : "http://127.0.0.1:8000/api1/get-data-aod/";
 
     const response = await fetch(apiUrl, {
       headers: {
@@ -31,7 +29,7 @@ export async function GET() {
     console.error("AOD Proxy error:", error);
     return NextResponse.json(
       {
-        error: "Failed to fetch AOD data",
+        error: "Gagal memuat data AOD",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }

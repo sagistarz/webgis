@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Poppins } from "next/font/google";
 import "./globals.css";
@@ -14,12 +13,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
   display: "swap",
 });
-
-export const metadata: Metadata = {
-  title: "WebGIS PM2.5 Jakarta",
-  description: "Aplikasi untuk memvisualisasikan data PM2.5 dan AOD di wilayah Jakarta",
-  keywords: ["PM2.5", "AOD", "Jakarta", "kualitas udara", "WebGIS"],
-};
 
 const poppins = Poppins({
   subsets: ["latin"],

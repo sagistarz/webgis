@@ -7,9 +7,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Tanggal is required" }, { status: 400 });
     }
 
-    const apiUrl = process.env.API_BASE_URL
-      ? `${process.env.API_BASE_URL}/api1/get-data-aodbydate/`
-      : "http://127.0.0.1:8000/api1/get-data-aodbydate/";
+    const apiUrl = process.env.API_BASE_URL ? `${process.env.API_BASE_URL}/api1/get-data-aodbydate/` : "http://127.0.0.1:8000/api1/get-data-aodbydate/";
 
     const response = await fetch(apiUrl, {
       method: "POST",
@@ -40,7 +38,7 @@ export async function POST(request: Request) {
     console.error("AOD History Proxy error:", error);
     return NextResponse.json(
       {
-        error: "Failed to fetch historical AOD data",
+        error: "Gagal memuat data historis AOD",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }

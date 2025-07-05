@@ -3,16 +3,14 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const apiUrl = process.env.API_BASE_URL
-    ? `${process.env.API_BASE_URL}/api2/weather/datapm25/`
-    : "http://127.0.0.1:8000/api2/weather/datapm25/";
+    const apiUrl = process.env.API_BASE_URL ? `${process.env.API_BASE_URL}/api2/weather/datapm25/` : "http://127.0.0.1:8000/api2/weather/datapm25/";
 
-  const response = await fetch(apiUrl, {
-    headers: {
-      "Content-Type": "application/json",
-      "ngrok-skip-browser-warning": "true",
-      "User-Agent": "Mozilla/5.0",
-    },
+    const response = await fetch(apiUrl, {
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+        "User-Agent": "Mozilla/5.0",
+      },
       cache: "no-store",
     });
 
@@ -29,7 +27,7 @@ export async function GET() {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {
-        error: "Failed to fetch PM25 data",
+        error: "Gagal memuat data PM2.5",
         message,
       },
       { status: 500 }

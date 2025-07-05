@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {
-        error: "Failed to fetch PM25 history data",
+        error: "Gagal memuat data historis PM2.5",
         message,
       },
       { status: 500 }

@@ -1,12 +1,10 @@
-"use client";
-
 import React, { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Navbar from "@/components/navbar/Navbar";
 import styles from "../../styles/pm25act.module.css";
 import { FiChevronRight } from "react-icons/fi";
-import { getStaticPM25Color } from "@/utils/color";
-import { BoundaryGeoJSONData, StationData, WeatherData } from "@/app/types";
+import { staticPM25Color } from "@/utils/color";
+import { BoundaryGeoJSONData, StationData, WeatherData, PM25Data } from "@/app/types";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getBoundaryStyle } from "@/utils/map";
@@ -30,21 +28,87 @@ const Calendar = dynamic(() => import("@/components/calendar/Calendar"), {
 const MapComponent = React.memo(
   ({
     stations,
+    historicalData,
     boundaryJakarta,
     getIconByPM25,
     getWeatherForStation,
     handleMarkerClick,
     mapRef,
+    selectedDate,
+    selectedStation,
+    activeMarkerRef,
   }: {
     stations: StationData[];
-    weatherData: WeatherData[];
+    historicalData: { pm25: PM25Data[]; weather: WeatherData[] };
     boundaryJakarta: BoundaryGeoJSONData | null;
-    getIconByPM25: (pm25: number | null) => L.Icon;
+    getIconByPM25: (pm25: number | null) => L.DivIcon;
     getWeatherForStation: (stationName: string) => WeatherData | undefined;
     handleMarkerClick: (station: StationData, layer: L.Marker) => void;
     mapRef: React.MutableRefObject<L.Map | null>;
-    isSplitView: boolean;
+    selectedDate: Date;
+    selectedStation: string | null;
+    activeMarkerRef: React.MutableRefObject<L.Marker | null>;
   }) => {
+    const formatLocalDate = useCallback((date: Date): string => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }, []);
+
+    const getPM25ForStation = useCallback(
+      (stationName: string) => {
+        const dateString = formatLocalDate(selectedDate);
+        const stationData = historicalData.pm25.find((item) => item.date === dateString && item.station_name === stationName);
+        return stationData?.pm25_value ?? null;
+      },
+      [historicalData.pm25, selectedDate, formatLocalDate]
+    );
+
+    useEffect(() => {
+      if (mapRef.current && selectedStation && activeMarkerRef.current) {
+        const pm25Value = getPM25ForStation(selectedStation);
+        const weather = getWeatherForStation(selectedStation);
+        const station = stations.find((s) => s.station_name === selectedStation);
+
+        if (station) {
+          const popupContent = `
+            <div class="font-bold">Stasiun: ${station.station_name.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase())}</div>
+            <div class="font-bold">PM2.5: ${pm25Value !== null && !isNaN(pm25Value) ? pm25Value.toFixed(2) : "Tidak tersedia"}</div>
+            <div class="text-white font-semibold px-2 py-1 rounded mt-1 mb-1 inline-block" style="background-color: ${staticPM25Color(pm25Value)}">
+              ${
+                pm25Value === null || isNaN(pm25Value)
+                  ? "Kualitas: Tidak tersedia"
+                  : pm25Value <= 50
+                  ? "Kualitas: BAIK"
+                  : pm25Value <= 100
+                  ? "Kualitas: SEDANG"
+                  : pm25Value <= 199
+                  ? "Kualitas: TIDAK SEHAT"
+                  : pm25Value <= 299
+                  ? "Kualitas: SANGAT TIDAK SEHAT"
+                  : "Kualitas: BERBAHAYA"
+              }
+            </div>
+            ${
+              weather
+                ? `<div class="mt-2 text-sm">
+                   <div>Suhu: ${weather.temperature.toFixed(1)} °C</div>
+                   <div>Curah hujan: ${weather.precipitation.toFixed(1)} mm</div>
+                   <div>Kelembaban: ${weather.humidity.toFixed(1)} %</div>
+                   <div>Arah angin: ${weather.wind_dir.toFixed(1)}°</div>
+                   <div>Kec. angin: ${weather.wind_speed.toFixed(1)} m/s</div>
+                 </div>`
+                : `<div class="mt-2 text-sm italic text-gray-500">Data cuaca tidak tersedia</div>`
+            }
+          `;
+          activeMarkerRef.current.setPopupContent(popupContent);
+          activeMarkerRef.current.openPopup();
+          console.log(`Popup updated for station: ${selectedStation} on date: ${formatLocalDate(selectedDate)}`);
+        }
+      }
+    }, [selectedDate, historicalData, selectedStation, getPM25ForStation, getWeatherForStation, stations, mapRef, activeMarkerRef, formatLocalDate]);
+
     const handleMapReady = useCallback(() => {
       if (mapRef.current) {
         mapRef.current.invalidateSize();
@@ -75,8 +139,9 @@ const MapComponent = React.memo(
         {Array.isArray(stations) &&
           stations.length > 0 &&
           stations.map((station, index) => {
+            const pm25Value = getPM25ForStation(station.station_name);
             const weather = getWeatherForStation(station.station_name);
-            const icon = getIconByPM25(station.pm25_value);
+            const icon = getIconByPM25(pm25Value);
 
             return (
               <Marker
@@ -88,18 +153,18 @@ const MapComponent = React.memo(
                 }}
               >
                 <Popup>
-                  <div className="font-bold">Stasiun: {station.station_name}</div>
-                  <div className="font-bold">PM2.5: {station.pm25_value !== null && !isNaN(station.pm25_value) ? station.pm25_value.toFixed(2) : "Tidak tersedia"}</div>
-                  <div className="text-white font-semibold px-2 py-1 rounded mt-1 mb-1 inline-block" style={{ backgroundColor: getStaticPM25Color(station.pm25_value) }}>
-                    {station.pm25_value === null || isNaN(station.pm25_value)
+                  <div className="font-bold">Stasiun: {station.station_name.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase())}</div>
+                  <div className="font-bold">PM2.5: {pm25Value !== null && !isNaN(pm25Value) ? pm25Value.toFixed(2) : "Tidak tersedia"}</div>
+                  <div className="text-white font-semibold px-2 py-1 rounded mt-1 mb-1 inline-block" style={{ backgroundColor: staticPM25Color(pm25Value) }}>
+                    {pm25Value === null || isNaN(pm25Value)
                       ? "Kualitas: Tidak tersedia"
-                      : station.pm25_value <= 50
+                      : pm25Value <= 50
                       ? "Kualitas: BAIK"
-                      : station.pm25_value <= 100
+                      : pm25Value <= 100
                       ? "Kualitas: SEDANG"
-                      : station.pm25_value <= 199
+                      : pm25Value <= 199
                       ? "Kualitas: TIDAK SEHAT"
-                      : station.pm25_value <= 299
+                      : pm25Value <= 299
                       ? "Kualitas: SANGAT TIDAK SEHAT"
                       : "Kualitas: BERBAHAYA"}
                   </div>
@@ -108,8 +173,8 @@ const MapComponent = React.memo(
                       <div>Suhu: {weather.temperature.toFixed(1)} °C</div>
                       <div>Curah hujan: {weather.precipitation.toFixed(1)} mm</div>
                       <div>Kelembaban: {weather.humidity.toFixed(1)} %</div>
-                      <div>Arah angin {weather.wind_dir}°</div>
-                      <div>Kec. angin: {weather.wind_speed.toFixed(1)} km/h</div>
+                      <div>Arah angin: {weather.wind_dir.toFixed(1)}°</div>
+                      <div>Kec. angin: {weather.wind_speed.toFixed(1)} m/s</div>
                     </div>
                   ) : (
                     <div className="mt-2 text-sm italic text-gray-500">Data cuaca tidak tersedia</div>
@@ -129,40 +194,59 @@ const StasiunPM25 = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const activeMarkerRef = useRef<L.Marker | null>(null);
   const [stations, setStations] = useState<StationData[]>([]);
-  const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
+  const [historicalData, setHistoricalData] = useState<{ pm25: PM25Data[]; weather: WeatherData[] }>({ pm25: [], weather: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [boundaryJakarta, setBoundaryJakarta] = useState<BoundaryGeoJSONData | null>(null);
   const [isSplitView, setIsSplitView] = useState(false);
   const [selectedStation, setSelectedStation] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isClient, setIsClient] = useState(false);
 
-  const createIcon = useCallback(
-    (imgName: string) =>
-      L.icon({
-        iconUrl: `/images/${imgName}`,
-        iconSize: [37, 37],
-        iconAnchor: [16, 37],
-        popupAnchor: [0, -37],
-        shadowUrl: undefined,
-      }),
-    []
-  );
+  const createIcon = useCallback((pm25: number | null) => {
+    const color = staticPM25Color(pm25);
+    const value = pm25 !== null && !isNaN(pm25) ? pm25.toFixed(0) : "-";
+    return L.divIcon({
+      className: "custom-marker",
+      html: `
+          <div style="
+            background-color: ${color};
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          ">
+            ${value}
+          </div>
+        `,
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
+      popupAnchor: [0, -20],
+    });
+  }, []);
 
   const getIconByPM25 = useCallback(
-    (pm25: number | null) => {
-      if (pm25 === null || isNaN(pm25)) return createIcon("indikator_null.png");
-      if (pm25 <= 50) return createIcon("indikator_baik.png");
-      if (pm25 <= 100) return createIcon("indikator_sedang.png");
-      if (pm25 <= 199) return createIcon("indikator_tidak_sehat.png");
-      if (pm25 <= 299) return createIcon("indikator_sangat_tidak_sehat.png");
-      return createIcon("indikator_berbahaya.png");
+    (pm25: number | null): L.DivIcon => {
+      return createIcon(pm25);
     },
     [createIcon]
   );
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const formatLocalDate = useCallback((date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const fetchRealtimeData = useCallback(async () => {
     try {
       const [pm25Response, weatherResponse, boundaryResponse] = await Promise.all([
         fetch("/api/pm25-aktual", { cache: "no-store" }),
@@ -177,7 +261,15 @@ const StasiunPM25 = () => {
       if (pm25Data.error) throw new Error(pm25Data.error || "Gagal memuat data PM2.5");
 
       if (Array.isArray(pm25Data)) {
-        setStations(pm25Data);
+        setStations(
+          pm25Data.map((item: PM25Data) => ({
+            station_name: item.station_name,
+            latitude: item.latitude,
+            longitude: item.longitude,
+            pm25_value: item.pm25_value,
+          }))
+        );
+        setHistoricalData((prev) => ({ ...prev, pm25: pm25Data }));
       } else {
         setStations([]);
         throw new Error(pm25Data.message?.includes("Tidak ada data PM2.5") ? "Tidak ada data PM2.5 tersedia" : "Gagal memuat data stasiun");
@@ -186,7 +278,7 @@ const StasiunPM25 = () => {
       if (!weatherResponse.ok) throw new Error(`Weather fetch failed: ${weatherResponse.status}`);
       const weatherData = await weatherResponse.json();
       if (weatherData.error) throw new Error(weatherData.error || "Gagal memuat data cuaca");
-      setWeatherData(Array.isArray(weatherData) ? weatherData : []);
+      setHistoricalData((prev) => ({ ...prev, weather: Array.isArray(weatherData) ? weatherData : [] }));
 
       if (!boundaryResponse.ok) throw new Error(`Boundary fetch failed: ${boundaryResponse.status}`);
       const boundaryData = await boundaryResponse.json();
@@ -202,10 +294,59 @@ const StasiunPM25 = () => {
     }
   }, []);
 
+  const fetchHistoricalData = useCallback(
+    async (date: Date) => {
+      const dateString = formatLocalDate(date);
+      const isToday = dateString === formatLocalDate(new Date());
+
+      if (isToday) {
+        await fetchRealtimeData();
+        return;
+      }
+
+      try {
+        const [pm25Response, weatherResponse] = await Promise.all([
+          fetch("/api/pm25-aktual/pm25-aktual-by-date", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ date: dateString }),
+          }),
+          fetch("/api/weather/weather-by-date", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ date: dateString }),
+          }),
+        ]);
+
+        // if (!pm25Response.ok) throw new Error(`Terjadi kesalahan saat memuat data PM2.5 untuk tanggal ${dateString}: ${pm25Response.status}`);
+        if (!pm25Response.ok) throw new Error(`Terjadi kesalahan saat memuat data PM2.5 untuk tanggal ${dateString}`);
+        const pm25Data = await pm25Response.json();
+        if (pm25Data.error) throw new Error(pm25Data.error || "Gagal memuat data historis PM2.5");
+        setHistoricalData((prev) => ({ ...prev, pm25: Array.isArray(pm25Data) ? pm25Data : [] }));
+
+        // if (!weatherResponse.ok) throw new Error(`Terjadi kesalahan saat memuat data cuaca untuk tanggal ${dateString}: ${weatherResponse.status}`);
+        if (!weatherResponse.ok) throw new Error(`Terjadi kesalahan saat memuat data cuaca untuk tanggal ${dateString}`);
+        const weatherData = await weatherResponse.json();
+        if (weatherData.error) throw new Error(weatherData.error || "Gagal memuat data historis cuaca");
+        setHistoricalData((prev) => ({ ...prev, weather: Array.isArray(weatherData) ? weatherData : [] }));
+
+        setError(null);
+      } catch (err) {
+        console.error("Terjadi kesalahan saat memuat data historis", err);
+        setError((err as Error).message || "Terjadi kesalahan saat memuat data historis");
+      }
+    },
+    [formatLocalDate, fetchRealtimeData]
+  );
+
   useEffect(() => {
     setIsClient(true);
-    fetchData();
-  }, [fetchData]);
+    fetchRealtimeData();
+  }, [fetchRealtimeData]);
+
+  useEffect(() => {
+    fetchHistoricalData(selectedDate);
+  }, [selectedDate, fetchHistoricalData]);
 
   useEffect(() => {
     return () => {
@@ -240,9 +381,9 @@ const StasiunPM25 = () => {
 
   const getWeatherForStation = useCallback(
     (stationName: string) => {
-      return weatherData.find((w) => w.station_name === stationName);
+      return historicalData.weather.find((w) => w.station_name === stationName);
     },
-    [weatherData]
+    [historicalData.weather]
   );
 
   const handleMarkerClick = useCallback(
@@ -282,12 +423,22 @@ const StasiunPM25 = () => {
     [stations, mapRef]
   );
 
+  const handleDateChange = useCallback(
+    (date: Date) => {
+      setSelectedDate(date);
+      console.log(`Date changed to: ${formatLocalDate(date)}`);
+    },
+    [formatLocalDate]
+  );
+
   const toggleSplitView = useCallback(() => {
     setIsSplitView((prev) => {
       if (prev) {
         setSelectedStation(null);
         activeMarkerRef.current = null;
-        console.log("Split view closed, resetting selected station and marker");
+        setSelectedDate(new Date()); // Reset ke hari ini
+        fetchRealtimeData(); // Ambil data real-time
+        console.log("Split view closed, resetting selected station, marker, and date to today");
       } else {
         if (!selectedStation) {
           const defaultStation = stations.find((s) => s.station_name === "bundaran_hi");
@@ -312,22 +463,24 @@ const StasiunPM25 = () => {
       }
       return !prev;
     });
-  }, [selectedStation, stations, mapRef]);
+  }, [selectedStation, stations, mapRef, fetchRealtimeData]);
 
   const memoizedMap = useMemo(
     () => (
       <MapComponent
         stations={stations}
-        weatherData={weatherData}
+        historicalData={historicalData}
         boundaryJakarta={boundaryJakarta}
         getIconByPM25={getIconByPM25}
         getWeatherForStation={getWeatherForStation}
         handleMarkerClick={handleMarkerClick}
         mapRef={mapRef}
-        isSplitView={isSplitView}
+        selectedDate={selectedDate}
+        selectedStation={selectedStation}
+        activeMarkerRef={activeMarkerRef}
       />
     ),
-    [stations, weatherData, boundaryJakarta, getIconByPM25, getWeatherForStation, handleMarkerClick, isSplitView]
+    [stations, historicalData, boundaryJakarta, getIconByPM25, getWeatherForStation, handleMarkerClick, selectedDate, selectedStation]
   );
 
   if (!isClient) {
@@ -360,9 +513,6 @@ const StasiunPM25 = () => {
           <div className={styles.alert}>
             <div className={styles.alertContent}>
               <span className="text-red-500 font-semibold">{error}</span>
-              <button onClick={fetchData} className="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 mr-2">
-                Coba Lagi
-              </button>
               <button onClick={() => setError(null)} className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500">
                 Tutup
               </button>
@@ -375,30 +525,30 @@ const StasiunPM25 = () => {
             <div className={styles.legend}>
               <h4>Indikator PM2.5 (µg/m³)</h4>
               <div className={styles.legendItem}>
-                <img src="/images/indikator_baik.png" alt="Baik" className={styles.legendIcon} />
+                <span className={styles.legendColor} style={{ backgroundColor: "#00CC00" }}></span>
                 <span>Baik (0 - 50)</span>
               </div>
               <div className={styles.legendItem}>
-                <img src="/images/indikator_sedang.png" alt="Sedang" className={styles.legendIcon} />
+                <span className={styles.legendColor} style={{ backgroundColor: "#0133FF" }}></span>
                 <span>Sedang (51 - 100)</span>
               </div>
               <div className={styles.legendItem}>
-                <img src="/images/indikator_tidak_sehat.png" alt="Tidak Sehat" className={styles.legendIcon} />
+                <span className={styles.legendColor} style={{ backgroundColor: "#FFC900" }}></span>
                 <span>Tidak Sehat (101 - 199)</span>
               </div>
               <div className={styles.legendItem}>
-                <img src="/images/indikator_sangat_tidak_sehat.png" alt="Sangat Tidak Sehat" className={styles.legendIcon} />
+                <span className={styles.legendColor} style={{ backgroundColor: "#FF0000" }}></span>
                 <span>Sangat Tidak Sehat (200 - 299)</span>
               </div>
               <div className={styles.legendItem}>
-                <img src="/images/indikator_berbahaya.png" alt="Berbahaya" className={styles.legendIcon} />
+                <span className={styles.legendColor} style={{ backgroundColor: "#000000" }}></span>
                 <span>Berbahaya (&gt;300)</span>
               </div>
             </div>
           </div>
           {isSplitView && selectedStation && (
             <div className="w-1/2 h-full overflow-auto">
-              <Calendar location={selectedStation} isSplitView={true} showRightPanel={false} splitViewContainer={styles.splitViewContainer} onStationChange={handleStationChange} />
+              <Calendar location={selectedStation} isSplitView={true} showRightPanel={false} splitViewContainer={styles.splitViewContainer} onStationChange={handleStationChange} onDateChange={handleDateChange} />
             </div>
           )}
           <button onClick={toggleSplitView} className={`${styles.toggleButton} ${isSplitView ? styles.splitView : ""}`} title={isSplitView ? "Tutup Kalender" : "Buka Kalender"}>

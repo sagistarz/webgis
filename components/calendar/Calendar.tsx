@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "@/styles/calendar.module.css";
 import Image from "next/image";
-import { getStaticPM25Color } from "@/utils/color";
+import { staticPM25Color } from "@/utils/color";
 
 interface PM25Data {
   id: number;
@@ -33,6 +33,7 @@ interface CalendarProps {
   showRightPanel?: boolean;
   splitViewContainer?: string;
   onStationChange?: (stationName: string) => void;
+  onDateChange?: (date: Date) => void;
 }
 
 function getDaysInMonth(month: number, year: number): number {
@@ -46,7 +47,7 @@ function getFirstDayOfMonth(month: number, year: number): number {
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const DEFAULT_STATION = "bundaran_hi";
 
-const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, showRightPanel = true, splitViewContainer, onStationChange }) => {
+const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, showRightPanel = true, splitViewContainer, onStationChange, onDateChange }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [pm25Data, setPM25Data] = useState<PM25Data[]>([]);
@@ -87,8 +88,11 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
     (day: number) => {
       const clickedDate = new Date(currentYear, currentMonth, day);
       setSelectedDate(clickedDate);
+      if (onDateChange) {
+        onDateChange(clickedDate);
+      }
     },
-    [currentMonth, currentYear]
+    [currentMonth, currentYear, onDateChange]
   );
 
   const formatDate = useCallback((date: Date): string => {
@@ -112,7 +116,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
   const fetchRealtimePM25Data = useCallback(async () => {
     try {
       const response = await fetch("/api/pm25-aktual", { cache: "no-store" });
-      if (!response.ok) throw new Error(`Failed to fetch realtime PM2.5 data: ${response.status}`);
+      if (!response.ok) throw new Error(`${response.status} : Gagal memuat data PM2.5`);
       const data = await response.json();
       if (data.error) throw new Error(data.error || "Gagal memuat data PM2.5");
       return data;
@@ -128,7 +132,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date }),
       });
-      if (!response.ok) throw new Error(`Failed to fetch historical PM2.5 data for ${date}: ${response.status}`);
+      if (!response.ok) throw new Error(`${response.status} : Gagal memuat data historis PM2.5 tanggal ${date}`);
       const data = await response.json();
       if (data.error) throw new Error(data.error || "Gagal memuat data historis PM2.5");
       return data;
@@ -154,7 +158,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
           cache: "no-store",
         });
 
-        if (!response.ok) throw new Error(`Failed to fetch weather data for ${date}: ${response.status}`);
+        if (!response.ok) throw new Error(`${response.status} : Gagal memuat data cuaca tanggal ${date}:`);
         const data = await response.json();
         if (data.error) throw new Error(data.error || "Gagal memuat data cuaca");
         return data;
@@ -268,7 +272,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
         <div className={styles.qualityBox}>
           <div className="flex items-center justify-center gap-4">
             <div className={styles.spinner}></div>
-            <span style={{ color: 'black' }}>Memuat data PM2.5...</span>
+            <span style={{ color: "black" }}>Memuat data PM2.5...</span>
           </div>
         </div>
       );
@@ -277,12 +281,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
     if (error) {
       return (
         <div className={styles.qualityBox}>
-          <div className={styles.error}>
-            {error}
-            <button onClick={() => loadDataForMonth()} className={styles.retryButton}>
-              Coba Lagi
-            </button>
-          </div>
+          <div className={styles.error}>{error}</div>
         </div>
       );
     }
@@ -307,46 +306,51 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
   const renderLegend = () => (
     <div className={styles.legend}>
       <h3>Keterangan (µg/m³)</h3>
-      {[
-        {
-          range: "0-50",
-          color: getStaticPM25Color(50),
-          label: "Baik",
-          desc: "Tingkat kualitas udara yang tidak memberikan efek bagi kesehatan manusia atau hewan dan tidak berpengaruh pada tumbuhan, bangunan ataupun nilai estetika",
-        },
-        {
-          range: "51-100",
-          color: getStaticPM25Color(100),
-          label: "Sedang",
-          desc: "Tingkat kualitas udara yang tidak berpengaruh pada kesehatan manusia ataupun hewan tetapi berpengaruh pada tumbuhan yang sensitif, dan nilai estetika",
-        },
-        {
-          range: "101-199",
-          color: getStaticPM25Color(199),
-          label: "Tidak Sehat",
-          desc: "Tingkat kualitas udara yang bersifat merugikan pada manusia ataupun kelompok hewan yang sensitif atau bisa menimbulkan kerusakan pada tumbuhan ataupun nilai estetika",
-        },
-        {
-          range: "200-299",
-          color: getStaticPM25Color(299),
-          label: "Sangat Tidak Sehat",
-          desc: "Tingkat kualitas udara yang dapat merugikan kesehatan pada sejumlah segmen populasi yang terpapar",
-        },
-        {
-          range: "300-500",
-          color: getStaticPM25Color(500),
-          label: "Berbahaya",
-          desc: "Tingkat kualitas udara berbahaya yang secara umum dapat merugikan kesehatan yang serius pada populasi",
-        },
-      ].map((item, index) => (
-        <div key={index} className={styles.legendItem}>
-          <div className={styles.legendHeader}>
+      <div className={styles.legendGrid}>
+        <div className={styles.legendHeader}>
+          <span>Konsentrasi</span>
+          <span>Kualitas</span>
+          <span>Deskripsi</span>
+        </div>
+        {[
+          {
+            range: "0-50",
+            color: staticPM25Color(50),
+            label: "Baik",
+            desc: "Tingkat kualitas udara yang tidak memberikan efek bagi kesehatan manusia atau hewan dan tidak berpengaruh pada tumbuhan, bangunan ataupun nilai estetika",
+          },
+          {
+            range: "51-100",
+            color: staticPM25Color(100),
+            label: "Sedang",
+            desc: "Tingkat kualitas udara yang tidak berpengaruh pada kesehatan manusia ataupun hewan tetapi berpengaruh pada tumbuhan yang sensitif, dan nilai estetika",
+          },
+          {
+            range: "101-199",
+            color: staticPM25Color(199),
+            label: "Tidak Sehat",
+            desc: "Tingkat kualitas udara yang bersifat merugikan pada manusia ataupun kelompok hewan yang sensitif atau bisa menimbulkan kerusakan pada tumbuhan ataupun nilai estetika",
+          },
+          {
+            range: "200-299",
+            color: staticPM25Color(299),
+            label: "Sangat Tidak Sehat",
+            desc: "Tingkat kualitas udara yang dapat merugikan kesehatan pada sejumlah segmen populasi yang terpapar",
+          },
+          {
+            range: "300-500",
+            color: staticPM25Color(500),
+            label: "Berbahaya",
+            desc: "Tingkat kualitas udara berbahaya yang secara umum dapat merugikan kesehatan yang serius pada populasi",
+          },
+        ].map((item, index) => (
+          <div key={index} className={styles.legendItem}>
             <span>{item.range}</span>
             <span style={{ backgroundColor: item.color }}>{item.label}</span>
+            <span>{item.desc}</span>
           </div>
-          <p>{item.desc}</p>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 
@@ -371,7 +375,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
               <td colSpan={5} className={styles.loadingRow}>
                 <div className="flex items-center justify-center gap-4">
                   <div className={styles.spinner}></div>
-                  <span style={{ color: 'black' }}>Memuat data cuaca...</span>
+                  <span style={{ color: "black" }}>Memuat data cuaca...</span>
                 </div>
               </td>
             </tr>
@@ -379,9 +383,6 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
             <tr>
               <td colSpan={5} className={styles.errorRow}>
                 {weatherError}
-                <button onClick={() => fetchWeatherData(formatLocalDate(selectedDate))} className={styles.retryButton}>
-                  Coba Lagi
-                </button>
               </td>
             </tr>
           ) : weatherData ? (
@@ -407,19 +408,21 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
       <div className={styles.content}>
         <div className={styles.left}>
           <div className={styles.location}>
-            <div className={styles.locationIcon}>📍</div>
-            <select value={selectedStation} onChange={handleDropdownChange} className={styles.stationSelector} disabled={isLoading}>
-              {stationNames.map((name) => (
-                <option key={name} value={name}>
-                  {formatStationName(name)}
-                </option>
-              ))}
-            </select>
+            <p className={styles.stationLabel}>Pilih stasiun</p>
+            <div className={styles.locationWrapper}>
+              <div className={styles.locationIcon}>📍</div>
+              <select value={selectedStation} onChange={handleDropdownChange} className={styles.stationSelector} disabled={isLoading}>
+                {stationNames.map((name) => (
+                  <option key={name} value={name}>
+                    {formatStationName(name)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className={styles.date}>
-            📅 {selectedDate.getDate() === today.getDate() && selectedDate.getMonth() === today.getMonth() && selectedDate.getFullYear() === today.getFullYear() ? "Hari ini" : "Tanggal terpilih"}: {formatDate(selectedDate)}
-          </div>
-          <p>Data PM2.5 (µg/m³)</p>
+          <h2 className={styles.date}>
+            Data PM2.5 (µg/m³) pada tanggal <span style={{ fontWeight: "bold" }}>{formatDate(selectedDate)}</span>
+          </h2>
           <div className="mb-4">
             <div className="flex justify-between items-center mb-2">
               <div className={styles.monthYearSelector}>
@@ -442,15 +445,10 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
             {isLoading ? (
               <div className="text-center py-8 flex items-center justify-center gap-4">
                 <div className={styles.spinner}></div>
-                <span style={{ color: 'black' }}>Memuat data PM2.5...</span>
+                <span style={{ color: "black" }}>Memuat data PM2.5...</span>
               </div>
             ) : error ? (
-              <div className="text-center py-8 text-red-500">
-                {error}
-                <button onClick={() => loadDataForMonth()} className={styles.retryButton}>
-                  Coba Lagi
-                </button>
-              </div>
+              <div className="text-center py-8 text-red-500">{error}</div>
             ) : (
               <div className={styles.calendarGrid}>
                 {["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"].map((day) => (
@@ -474,7 +472,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
                           <div
                             className={styles.indikatorPM}
                             style={{
-                              backgroundColor: getStaticPM25Color(dayData.pm25),
+                              backgroundColor: staticPM25Color(dayData.pm25),
                             }}
                           >
                             <span className={styles.pmValue}>{dayData.pm25 !== null ? Math.round(dayData.pm25) : "-"}</span>
@@ -491,7 +489,7 @@ const Calendar: React.FC<CalendarProps> = ({ location, isSplitView = false, show
         </div>
         {showRightPanel && (
           <div className={styles.right}>
-            <div className={styles.infromationPM}>
+            <div className={styles.informationPM}>
               {renderQualityBox()}
               <div className={styles.activityRec}>
                 <b>Kegiatan yang direkomendasikan</b>
